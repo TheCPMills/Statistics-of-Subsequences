@@ -35,7 +35,7 @@ public class Part3 {
             y -= stride - thickness;
         }
 
-        ImageIO.write(img, "png", new File("res/Matrices/" + n + "-Edited.png"));
+        ImageIO.write(img, "png", new File("LCS Matrices/res/matrix-mods/n=" + n + "-SecondQuadrant.png"));
     }
 
     private static void drawBox(BufferedImage img, int x, int y, int width, int height, int color) {
