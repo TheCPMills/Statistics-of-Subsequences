@@ -40,7 +40,7 @@ public class Part1 {
             Graphics2D g = resized.createGraphics();
             g.drawImage(img, 0, 0, size, size, null);
             g.dispose();
-            ImageIO.write(resized, "png", new File("LCS Matrices/res/matrix/n=" + n + ".png"));
+            ImageIO.write(resized, "png", new File("res/matrix/n=" + n + ".png"));
 
             Part2.part2(n, img, decrementedColorsMap, editedColorsMap);
         }
