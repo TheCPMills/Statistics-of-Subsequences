@@ -46,7 +46,7 @@ def F_z1(z, v, length):
         # For st = (A, B),
         # v[(A, T(B)0)] + v[(A, T(B)1)]
         A = st & 0xAAAAAAAA
-        TB = (st & 0x55555555) & (1 << (length - 1))
+        TB = (st & 0x55555555) & ((1 << (length - 1)) - 1)
         ATB0 = A | (TB << 2)
         ATB1 = ATB0 | 0b1  # 0b1 <- the smallest bit in B is set to 1
         ret[st] = v[ATB0] + v[ATB1]  # if h(A) != h(B) and h(A) = z
@@ -54,7 +54,7 @@ def F_z1(z, v, length):
     for st in range2:
         # For st = (A, B),
         # v[(T(A)0, B)] + v[(T(A)1, B)]
-        TA = (st & 0xAAAAAAAA) & (1 << (length - 1))
+        TA = (st & 0xAAAAAAAA) & ((1 << (length - 1)) - 1)
         B = st & 0x55555555
         TA0B = (TA << 2) | B
         TA1B = TA0B | 0b10  # 0b10 <- the smallest bit in A is set to 1
@@ -74,8 +74,8 @@ def F_z2(z, v, length):
     for st in rangeF:
         # For st = (A, B),
         # v[(T(A)0, T(B)0)] + v[(T(A)0, T(B)1)] + v[(T(A)1, T(B)0)] + v[(T(A)1, T(B)1)]
-        TA = (st & 0xAAAAAAAA) & (1 << (length - 1))
-        TB = (st & 0x55555555) & (1 << (length - 1))
+        TA = (st & 0xAAAAAAAA) & ((1 << (length - 1)) - 1)
+        TB = (st & 0x55555555) & ((1 << (length - 1)) - 1)
         TA0TB0 = (TA << 2) | (TB << 2)
         TA0TB1 = TA0TB0 | 0b1
         TA1TB0 = TA0TB0 | 0b10
