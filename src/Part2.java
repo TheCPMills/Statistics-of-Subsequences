@@ -3,7 +3,7 @@ import java.util.*;
 import java.io.*;
 
 public class Part2 {
-    public static void part2(int n, BufferedImage src, HashMap<Integer, Integer> decrementedColorsMap, HashMap<Integer, Integer> editedColorsMap, boolean[][] usingFirstCharOfB, boolean[][] longestCommonSubsequenceOfAAndTailOfBPresentAfterFirstOccurenceOfOneInA, FileWriter writer) throws Exception {
+    public static void part2(int n, BufferedImage src, HashMap<Integer, Integer> decrementedColorsMap, HashMap<Integer, Integer> editedColorsMap, boolean[][] usingFirstCharOfB, boolean[][] longestCommonSubsequenceOfTailsOfAAndBPresentAfterFirstOccurenceOfOneInA, FileWriter writer) throws Exception {
         BufferedImage img = new BufferedImage(src.getWidth() / 2, src.getHeight() / 2, BufferedImage.TYPE_INT_RGB);
 
         double gamma = 3.0;
@@ -14,7 +14,7 @@ public class Part2 {
                 int topColor = editedColorsMap.get(src.getRGB(i, j));
                 int bottomColor;
 
-                if (usingFirstCharOfB[i][j] && !longestCommonSubsequenceOfAAndTailOfBPresentAfterFirstOccurenceOfOneInA[i][j]) {
+                if (usingFirstCharOfB[i][j] && !longestCommonSubsequenceOfTailsOfAAndBPresentAfterFirstOccurenceOfOneInA[i][j]) {
                     bottomColor = editedColorsMap.get(decrementedColorsMap.get(src.getRGB(i, (int) (j + Math.pow(2, n - 1))))); // proposition 5
                 } else {
                     bottomColor = editedColorsMap.get(src.getRGB(i, (int) (j + Math.pow(2, n - 1)))); // proposition 4

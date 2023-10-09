@@ -30,14 +30,14 @@ public class Part1 {
             BufferedImage img = new BufferedImage((int) Math.pow(2, n), (int) Math.pow(2, n), BufferedImage.TYPE_INT_RGB);
             List<String> strings = genStringSet(n);
 			boolean[][] usingFirstCharOfB = new boolean[strings.size() / 2][strings.size() / 2];
-            boolean[][] longestCommonSubsequenceOfAAndTailOfBPresentAfterFirstOccurenceOfOneInA = new boolean[strings.size() / 2][strings.size() / 2];
+            boolean[][] longestCommonSubsequenceOfTailsOfAAndBPresentAfterFirstOccurenceOfOneInA = new boolean[strings.size() / 2][strings.size() / 2];
             for(int i = 0; i < strings.size(); i++) {
                 for(int j = 0; j < strings.size(); j++) {
                     int lcs = lcs_dynamic_programming(strings.get(i), strings.get(j));
 
 					if (i < Math.pow(2, n - 1) && j < Math.pow(2, n - 1)) {
 						usingFirstCharOfB[i][(int) Math.pow(2, n - 1) - j - 1] = usesFirstCharOfB(strings.get(i), strings.get(j));
-                        longestCommonSubsequenceOfAAndTailOfBPresentAfterFirstOccurenceOfOneInA[i][(int) Math.pow(2, n - 1) - j - 1] = LCSoAaToBPAFOoOiA(strings.get(i), strings.get(j));
+                        longestCommonSubsequenceOfTailsOfAAndBPresentAfterFirstOccurenceOfOneInA[i][(int) Math.pow(2, n - 1) - j - 1] = LCSoToAaBPAFOoOiA(strings.get(i), strings.get(j));
 					}
 
                     int color = colors[lcs];
@@ -52,7 +52,7 @@ public class Part1 {
             g.dispose();
             ImageIO.write(resized, "png", new File("res/matrix/n=" + n + ".png"));
 
-            Part2.part2(n, img, decrementedColorsMap, editedColorsMap, usingFirstCharOfB, longestCommonSubsequenceOfAAndTailOfBPresentAfterFirstOccurenceOfOneInA, writer);
+            Part2.part2(n, img, decrementedColorsMap, editedColorsMap, usingFirstCharOfB, longestCommonSubsequenceOfTailsOfAAndBPresentAfterFirstOccurenceOfOneInA, writer);
         }
     }
 
@@ -189,7 +189,7 @@ public class Part1 {
 		return true;
 	}
 
-    static boolean LCSoAaToBPAFOoOiA(String s1, String s2) {
+    static boolean LCSoToAaBPAFOoOiA(String s1, String s2) {
         String tailOfB = s2.substring(1);
 
         // find first index of 1 in s1
