@@ -1,0 +1,30 @@
+======== n = 1 ========
+No irregularities found.
+
+======== n = 2 ========
+No irregularities found.
+
+======== n = 3 ========
+No irregularities found.
+
+======== n = 4 ========
+No irregularities found.
+
+======== n = 5 ========
+No irregularities found.
+
+======== n = 6 ========
+No irregularities found.
+
+======== n = 7 ========
+No irregularities found.
+
+======== n = 8 ========
+No irregularities found.
+
+======== n = 9 ========
+No irregularities found.
+
+======== n = 10 ========
+No irregularities found.
+
