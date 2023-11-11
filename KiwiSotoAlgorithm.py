@@ -27,8 +27,13 @@ def FeasibleTriplet(length, n):
 
 # note: b contains 2^2l entries, and is 1 where v1 and v2 start with the same character and 0 otherwise
 def F(v1, v2, length):
-    return np.concatenate((np.ones(2**(2*length - 2)), np.zeros(2**(2*length - 1)), np.ones(2**(2*length - 2)))) \
-           + np.maximum(F_z(0, v1, v2, length), F_z(1, v1, v2, length))
+    b = np.concatenate((np.ones(2**(2*length - 2)), np.zeros(2**(2*length - 1)), np.ones(2**(2*length - 2))))
+
+    f01 = F_z1(0, v1, length)
+    f11 = F_z1(1, v1, length)
+    f_double = F_z2(0, v2, length)
+    
+    return b + np.maximum(0.5 * f01 + 0.25 * f_double, 0.5 * f11 + 0.25 * np.flip(f_double))
 
 
 def F_z(z, v1, v2, length):
@@ -94,11 +99,22 @@ def F_z2(z, v, length):
 
 
 def main():
-    (v, r, e) = FeasibleTriplet(2, 100)
-    print((v, r, e))
-    print(2*(r - e))
+    for i in range(1, 11):
+        (v, r, e) = FeasibleTriplet(i, 100)
+        print(2*(r - e))
 
 
 # Python is so annoying sometimes
+# l = 1 to 10, n = 100
+# 0.6666666666666643
+# 0.7272727272727195
+# 0.7479224376731253
+# 0.7585767077281673
+# 0.7654469749208062
+# 0.770273875304099
+# 0.7739750979416158
+# 0.7768606643965228
+# 0.7792593255657607
+# 0.7812812337791541
 if __name__ == '__main__':
     main()
