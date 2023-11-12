@@ -31,13 +31,9 @@ def F(v1, v2, length):
 
     f01 = F_z1(0, v1, length)
     f11 = F_z1(1, v1, length)
-    f_double = F_z2(0, v2, length)
-    
+    f_double = F_02(v2, length)
+
     return b + np.maximum(0.5 * f01 + 0.25 * f_double, 0.5 * f11 + 0.25 * np.flip(f_double))
-
-
-def F_z(z, v1, v2, length):
-    return 0.5 * F_z1(z, v1, length) + 0.25 * F_z2(z, v2, length)
 
 
 def F_z1(z, v, length):
@@ -76,15 +72,10 @@ def F_z1(z, v, length):
     return ret
 
 
-def F_z2(z, v, length):
+def F_02(v, length):
     ret = np.zeros(2 ** (2 * length))
 
-    if z == 0:
-        rangeF = range(0, 2 ** (2 * length - 2))
-    else:  # z == 1
-        rangeF = range(3 * (2 ** (2 * length - 2)), 2 ** (2 * length))
-
-    for st in rangeF:
+    for st in range(0, 2 ** (2 * length - 2)):
         # For st = (A, B),
         # v[(T(A)0, T(B)0)] + v[(T(A)0, T(B)1)] + v[(T(A)1, T(B)0)] + v[(T(A)1, T(B)1)]
         TA = (st & 0xAAAAAAAA) & ((1 << (2 * length - 1)) - 1)
