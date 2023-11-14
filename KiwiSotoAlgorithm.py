@@ -30,8 +30,8 @@ def F(v1, v2, length):
     b = np.concatenate((np.ones(2**(2*length - 2)), np.zeros(2**(2*length - 1)), np.ones(2**(2*length - 2))))
 
     f01 = F_z1(0, v1, length)
-    f11 = F_z1(1, v1, length)
-    f_double = F_02(v2, length)
+    f11 = np.flip(f01)
+    f_double = F_12(v2, length)
 
     return b + np.maximum(0.5 * f01 + 0.25 * f_double, 0.5 * f11 + 0.25 * np.flip(f_double))
 
@@ -72,7 +72,7 @@ def F_z1(z, v, length):
     return ret
 
 
-def F_02(v, length):
+def F_12(v, length):
     ret = np.zeros(2 ** (2 * length))
 
     for st in range(0, 2 ** (2 * length - 2)):
