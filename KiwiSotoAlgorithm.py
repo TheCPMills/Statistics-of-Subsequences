@@ -29,29 +29,20 @@ def FeasibleTriplet(length, n):
 def F(v1, v2, length):
     b = np.concatenate((np.ones(2**(2*length - 2)), np.zeros(2**(2*length - 1)), np.ones(2**(2*length - 2))))
 
-    f01 = F_z1(0, v1, length)
+    f01 = F_01(v1, length)
     f11 = np.flip(f01)
     f_double = F_12(v2, length)
 
     return b + np.maximum(0.5 * f01 + 0.25 * f_double, 0.5 * f11 + 0.25 * np.flip(f_double))
 
 
-def F_z1(z, v, length):
+def F_01(v, length):
     ret = np.zeros(2 ** (2 * length))
-
-    # range1 is the range of ordered string pairs (A, B) where h(A) = z and h(B) != z
-    # range2 is where h(A) != z and h(B) = z
-    if z == 0:
-        range1 = range(2 ** (2 * length - 2), 2 ** (2 * length - 1))
-        range2 = range(2 ** (2 * length - 1), 3 * (2 ** (2 * length - 2)))
-    else:  # z == 1
-        range2 = range(2 ** (2 * length - 2), 2 ** (2 * length - 1))
-        range1 = range(2 ** (2 * length - 1), 3 * (2 ** (2 * length - 2)))
-
     # st & 0xAAAAAAAA = only even bits of st, corresponding to bits in A
     # st & 0x55555555 = only odd bits of st, corresponding to bits in B
-    # Technically can do st | TB or st | TA instead of A | TB or B | TA, but less clear
-    for st in range1:
+
+    # range1 is the range of ordered string pairs (A, B) where h(A) = z and h(B) != z
+    for st in range(2 ** (2 * length - 2), 2 ** (2 * length - 1)):
         # For st = (A, B),
         # v[(A, T(B)0)] + v[(A, T(B)1)]
         A = st & 0xAAAAAAAA
@@ -60,7 +51,8 @@ def F_z1(z, v, length):
         ATB1 = ATB0 | 0b1  # 0b1 <- the smallest bit in B is set to 1
         ret[st] = v[ATB0] + v[ATB1]  # if h(A) != h(B) and h(A) = z
 
-    for st in range2:
+    # range2 is where h(A) != z and h(B) = z
+    for st in range(2 ** (2 * length - 1), 3 * (2 ** (2 * length - 2))):
         # For st = (A, B),
         # v[(T(A)0, B)] + v[(T(A)1, B)]
         TA = (st & 0xAAAAAAAA) & ((1 << (2 * length - 1)) - 1)
