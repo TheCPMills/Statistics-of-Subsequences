@@ -6,10 +6,10 @@ import numpy as np
 # Note: binary operations below rely on 32-bit constants. This also means that program can only currently calculate up
 # to length 16 without overflow. Easy to change, but be careful of overflow
 def FeasibleTriplet(length, n):
-    v0 = np.zeros(2 ** (2 * length))
-    v1 = np.zeros(2 ** (2 * length))
+    v0 = np.zeros(2 ** (2 * length - 1))
+    v1 = np.zeros(2 ** (2 * length - 1))
 
-    (u, r, e) = (np.zeros(2 ** (2 * length)), 0, 0)
+    (u, r, e) = (np.zeros(2 ** (2 * length - 1)), 0, 0)
 
     for i in range(2, n + 1):
         v2 = F(v1, v0, length)
@@ -25,47 +25,58 @@ def FeasibleTriplet(length, n):
     return u, r, e
 
 
-# note: b contains 2^2l entries, and is 1 where v1 and v2 start with the same character and 0 otherwise
+# note: b is 1 where v1 and v2 start with the same character and 0 otherwise
 def F(v1, v2, length):
-    b = np.concatenate((np.ones(2**(2*length - 2)), np.zeros(2**(2*length - 1)), np.ones(2**(2*length - 2))))
-
-    f01 = F_01(v1, length)
-    f11 = np.flip(f01)
+    [f01, f11] = np.split(F_01(v1, length), 2)
+    f11 = np.flip(f11)
     f_double = F_12(v2, length)
 
-    return b + np.maximum(0.5 * f01 + 0.25 * f_double, 0.5 * f11 + 0.25 * np.flip(f_double))
+    # b + max
+    b_combined = np.concatenate((1 + 0.25 * f_double, 0.5 * np.maximum(f01, f11)))
+    return b_combined
 
 
 def F_01(v, length):
-    ret = np.zeros(2 ** (2 * length))
+    ret = np.zeros(2 ** (2 * length - 1))
+
+    start = 2 ** (2 * length - 2)
+    # range2 is where h(A) != z and h(B) = z
+
     # st & 0xAAAAAAAA = only even bits of st, corresponding to bits in A
     # st & 0x55555555 = only odd bits of st, corresponding to bits in B
 
     # range1 is the range of ordered string pairs (A, B) where h(A) = z and h(B) != z
-    for st in range(2 ** (2 * length - 2), 2 ** (2 * length - 1)):
+    for st in range(start, 2 * start):
         # For st = (A, B),
         # v[(A, T(B)0)] + v[(A, T(B)1)]
         A = st & 0xAAAAAAAA
         TB = (st & 0x55555555) & ((1 << (2 * length - 2)) - 1)
         ATB0 = A | (TB << 2)
         ATB1 = ATB0 | 0b1  # 0b1 <- the smallest bit in B is set to 1
-        ret[st] = v[ATB0] + v[ATB1]  # if h(A) != h(B) and h(A) = z
 
-    # range2 is where h(A) != z and h(B) = z
-    for st in range(2 ** (2 * length - 1), 3 * (2 ** (2 * length - 2))):
+        # Transform indices to symmetrical position if they would be in right half of vector v
+        ATB0 = min(ATB0, (2 ** (2 * length) - 1) - ATB0)
+        ATB1 = min(ATB1, (2 ** (2 * length) - 1) - ATB1)
+        ret[st - start] = v[ATB0] + v[ATB1]  # if h(A) != h(B) and h(A) = z
+
+    for st in range(2 * start, 3 * start):
         # For st = (A, B),
         # v[(T(A)0, B)] + v[(T(A)1, B)]
         TA = (st & 0xAAAAAAAA) & ((1 << (2 * length - 1)) - 1)
         B = st & 0x55555555
         TA0B = (TA << 2) | B
         TA1B = TA0B | 0b10  # 0b10 <- the smallest bit in A is set to 1
-        ret[st] = v[TA0B] + v[TA1B]  # if h(A) != h(B) and h(B) = z
+
+        # Transform indices to symmetrical position if they would be in right half of vector v
+        TA0B = min(TA0B, (2 ** (2 * length) - 1) - TA0B)
+        TA1B = min(TA1B, (2 ** (2 * length) - 1) - TA1B)
+        ret[st - start] = v[TA0B] + v[TA1B]  # if h(A) != h(B) and h(B) = z
 
     return ret
 
 
 def F_12(v, length):
-    ret = np.zeros(2 ** (2 * length))
+    ret = np.zeros(2 ** (2 * length - 2))
 
     for st in range(0, 2 ** (2 * length - 2)):
         # For st = (A, B),
@@ -76,6 +87,12 @@ def F_12(v, length):
         TA0TB1 = TA0TB0 | 0b1
         TA1TB0 = TA0TB0 | 0b10
         TA1TB1 = TA0TB0 | 0b11
+
+        # Transform indices to symmetrical position if they would be in right half of vector v
+        TA0TB0 = min(TA0TB0, (2 ** (2 * length) - 1) - TA0TB0)
+        TA0TB1 = min(TA0TB1, (2 ** (2 * length) - 1) - TA0TB1)
+        TA1TB0 = min(TA1TB0, (2 ** (2 * length) - 1) - TA1TB0)
+        TA1TB1 = min(TA1TB1, (2 ** (2 * length) - 1) - TA1TB1)
         ret[st] = v[TA0TB0] + v[TA0TB1] + v[TA1TB0] + v[TA1TB1]  # if h(A) = h(B) = z
 
     return ret
