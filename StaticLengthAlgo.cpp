@@ -7,7 +7,7 @@ using namespace std;
 using Eigen::Array;
 using Eigen::ArrayXd;
 
-#define length 10
+#define length 12
 
 // equal to pow(2, 2 * length)
 const int powminus0 = 1 << (2 * length);
