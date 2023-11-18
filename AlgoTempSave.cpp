@@ -1,3 +1,5 @@
+#define EIGEN_NO_DEBUG 1
+
 #include <Eigen/Dense>
 #include <chrono>
 #include <cmath>
@@ -18,6 +20,7 @@ const int powminus2 = 1 << ((2 * length) - 2);
 
 // TODO: in all array accesses, get rid of range checking
 // https://eigen.tuxfamily.org/dox/group__QuickRefPage.html
+// (what's difference between vec[i] and vec(i)?)
 
 // TODO: could maybe reduced computation by replacing length arugment with static variables
 // or using constexpr's (e.g. for the pow variables)
@@ -35,6 +38,10 @@ const int powminus2 = 1 << ((2 * length) - 2);
 
 // TODO: figure out if this matters
 // https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
+
+// See https://eigen.tuxfamily.org/dox/TopicPreprocessorDirectives.html for flags to consider
+// E.g., EIGEN_NO_DEBUG (currently set at top, but idk if I'm using it right?)
+// May be possible to get around stack size issues with this. Unsure if good idea?
 
 void printArray(const ArrayXd &arr) {
     for (int i = 0; i < arr.size(); i++) {
