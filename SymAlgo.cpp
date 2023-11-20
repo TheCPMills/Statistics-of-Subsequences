@@ -1,4 +1,4 @@
-// #define EIGEN_NO_DEBUG 1
+#define EIGEN_NO_DEBUG 1
 
 #include <Eigen/Dense>
 #include <chrono>
