@@ -1,4 +1,5 @@
 // #define EIGEN_NO_DEBUG 1
+// TODO: PUT ABOVE BACK
 
 #include <Eigen/Dense>
 #include <chrono>
@@ -139,12 +140,31 @@ void F(const ArrayXd &v1, const ArrayXd &v2, ArrayXd &ret) {
     ret << (1 + 0.25 * f_double), f01f11;
 }
 
+// Exactly like F, but saves memory as it can be fed v, v+R but use only one vector
+void F_withplusR(double R, ArrayXd &v2, ArrayXd &ret) {
+    // v2 without R added
+    ArrayXd f_double;
+    F_12(v2, f_double);
+
+    // now add R to v2
+    v2 = v2 + R;
+    ArrayXd f01f11;
+    F_01(v2, f01f11);  // contains both f01 and f11 back to back
+    // reverses f11
+    f01f11(Eigen::seq(powminus2, powminus1 - 1)).reverseInPlace();
+
+    // The .eval() is necessary to prevent aliasing issues.
+    f01f11 = 0.5 * (f01f11(Eigen::seq(0, powminus2 - 1)).max(f01f11(Eigen::seq(powminus2, powminus1 - 1))).eval());
+
+    // Combine f_double and f01f11
+    // TODO: figure out how to assign this without doing any (or very minimal) copying
+    // because I am unsure if this copies the values to ret or just uses pointer
+    ret << (1 + 0.25 * f_double), f01f11;
+}
+
 void FeasibleTriplet(int n) {
-    ArrayXd v0 = ArrayXd::Zero(powminus1);
-    // cout << "snarf" << endl;
+    // ArrayXd v0 = ArrayXd::Zero(powminus1);
     ArrayXd v1 = ArrayXd::Zero(powminus1);
-    // cout << "snarf" << endl;
-    // cout.flush();
 
     // ArrayXd u = ArrayXd::Zero(powminus1);  // is u ever used? get rid of it?
     double r = 0;
@@ -153,39 +173,46 @@ void FeasibleTriplet(int n) {
         ArrayXd v2(powminus1);
         // cout << "snarf" << endl;
         // cout.flush();
-        F(v1, v1, v2);  // TODO: don't pass v1 twice
-        // above used to be F(v1 v0 v2) I think
-        //  cout << "snarf" << endl;
-        //  cout.flush();
-        //  cout << "patrol";
-        //  cout << "snarf" << endl;
-        double R = (v2 - v1).maxCoeff();
+        // Writes new vector (v2) into v2
+        F(v1, v1, v2);
 
-        // TODO: consider reusing v0 (or v1)'s memory for retF
+        // if this uses a vector of mem temporarily, store v2-v1 into v1?
+        double R = (v2 - v1).maxCoeff();
+        // Beyond this point, v1's values are no longer needed, so we reuse
+        // its memory for other computations.
+
         // ArrayXd retF(powminus1);
-        // NOTE: THE v0's HERE ARE REUSED MEMORY. v0's VALUES NOT USED.
-        // TODO: potential memory saving:
-        F(v2 + R, v2, v0);
-        ArrayXd W = v2 + 2 * R - v0;
-        double E = std::max(0.0, W.maxCoeff());
+        // NOTE: THE v1's HERE ARE REUSED MEMORY. v1's VALUES NOT USED, INSTEAD
+        // v1 IS COMPLETELY OVERWRITTEN HERE.
+        // Normally F(v2+R, v2, v0), but I think this ver saves an entire vector
+        // of memory at the cost of a small amount more computation.
+        F_withplusR(R, v2, v1);
+        v2 = v2 + R;
+
+        // Idea: normally below line is ArrayXd W = v2 + 2 * R - v0;
+        // However, special F function adds R, then we add R again to v2 beforehand.
+        // Further, we again reuse v1 to store W.
+        v1 = v2 - v1;
+        double E = std::max(0.0, v1.maxCoeff());
+
+        // FIXME: FIGURE OUT WHAT NEW IF STATEMENT NEEDS TO BE
         if (R - E >= r - e) {
             // u = v2;  // TODO: is u ever used? get rid of it?
             r = R;
             e = E;
         }
-        // // TODO: verify that these are copying reference, not value?
-        // v0 = v1;
-        // could maybe make this swap pointers instead
-        v1 = v2;
         r = R;
         e = E;
+        // TODO: verify that these are copying reference, not value?
+        // v0 = v1;
+        // could maybe make this swap pointers instead
+        v1 = v2 - 2 * R;
 
-        // TODO: ISSUE, THIS IS DECREASING AS IT RUNS INSTEAD OF GROWING.
-        // RESULTS ARE THUS NOT NECESSARILY VALID LOWER BOUNDS.
-        // r = R;  // TODO: make sure no surround if statement is okay
+        // FIXME: ISSUE, NORMAL FUNCTION IS DECREASING AS IT RUNS INSTEAD OF GROWING.
+        // RESULTS ARE THUS NOT NECESSARILY VALID LOWER BOUNDS? NEED TO VERIFY CORRECTNESS.
         if (PRINT_EVERY_ITER) {
             // cout << "At n=" << i << ": " << 2.0 * (r - e) << endl;
-            cout << "At n=" << i << ": " << 2.0 * (r - e) / (1 + (r - e)) << endl;
+            // cout << "At n=" << i << ": " << 2.0 * (r - e) / (1 + (r - e)) << endl;
             cout << "At n=" << i << ": " << (2.0 * r / (1 + r)) + 2.0 * (r - e) / (1 + (r - e)) << endl;
         }
 
