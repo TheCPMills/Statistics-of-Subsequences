@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title> Longest Common Subsequence Set Generator </title>
+    <meta charset="utf-8">
+
+    <style>
+        button {
+            margin: 0 5px;
+        }
+
+        .center {
+            margin: auto;
+            width: 97.5%;
+            padding: 10px;
+        }
+
+        .content {
+            margin: auto;
+            width: 97.5%;
+            padding: 10px;
+            text-align: center;
+        }
+    </style>
+
+    <link rel="icon" type="image/x-icon" href="img/favicon.ico">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom/dist/chartjs-plugin-zoom.min.js"></script>
+   
+</head>
+
+<body onload="setup();">
+    <div class="content">
+        <div class="center">
+            <h1>Subsequence Distribution Visualizer</h1>
+            <label for="n">n: </label>
+            <input type="number" id="n" name="n" min="1" max="10" value="1" size="5" />
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            <label for="m">m: </label>
+            <input type="number" id="m" name="m" min="1" max="10" value="1" size="5" />
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            <button onclick="generateDistribution();">Generate Distibution</button>
+
+            <!-- prevent typing -->
+            <script>
+                document.getElementById("n").addEventListener("keydown", function (e) {
+                    e.preventDefault();
+                });
+                document.getElementById("m").addEventListener("keydown", function (e) {
+                    e.preventDefault();
+                });
+            </script>
+
+            <br><br>
+            <div style="width: 100%;">
+                <canvas id="chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="chartHandler.js"></script>
+</body>
+
+</html>

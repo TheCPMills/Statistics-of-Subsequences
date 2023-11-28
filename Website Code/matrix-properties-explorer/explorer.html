@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title> Interactive Matrix Explorer </title>
+
+        <!-- Shaders -->
+        <script id="vertexShader" type="x-shader/x-vertex">
+            attribute vec3 vertexPosition;
+            attribute vec3 vertexNormal;
+            attribute vec3 vertexColor;
+            attribute vec2 vertexUV;
+            attribute vec3 vertexAmbient;
+            attribute vec3 vertexSpecular;
+            attribute float vertexShininess;
+
+            uniform mat4 cameraMatrix;
+            uniform mat4 modelMatrix;
+
+            varying vec3 position;
+            varying vec3 normal;
+            varying vec3 color;
+            varying vec2 textureCoordinates;
+            varying vec3 materialAmbient;
+            varying vec3 materialSpecular;
+            varying float materialShininess;
+            
+            void main() {
+                gl_Position = cameraMatrix * modelMatrix * vec4(vertexPosition, 1.0);
+                normal = vertexNormal;
+                color = vertexColor;
+                textureCoordinates = vertexUV;
+                materialAmbient = vertexAmbient;
+                materialSpecular = vertexSpecular;
+                materialShininess = vertexShininess;
+            }
+        </script>
+        
+        <script id="fragmentShader" type="x-shader/x-fragment">
+            precision mediump float;
+
+            varying vec3 position;
+            varying vec3 normal;
+            varying vec3 color;
+            varying vec2 textureCoordinates;
+            varying vec3 materialAmbient;
+            varying vec3 materialSpecular;
+            varying float materialShininess;
+
+            // materials and viewing
+            uniform vec3 cameraPosition;
+            uniform sampler2D diffuse0;
+            uniform sampler2D specular0;
+            uniform sampler2D normal0;
+            uniform vec3 lightPosition;
+            uniform bool useTexture;
+
+            // lighting
+            uniform int lightCount;
+            uniform int lightType;
+            uniform float lightAmbience;
+            uniform vec4 lightColor;
+
+            // point lights
+            uniform vec3 pointLightAttenuation;
+
+            // directional lights
+            uniform vec3 directionalLightDirection;
+
+            // spot lights
+            uniform vec3 spotLightDirection;
+            uniform vec3 spotLightAttenuation;
+            uniform float spotLightInnerCone;
+            uniform float spotLightOuterCone;
+
+            float map(float value, float min1, float max1, float min2, float max2) {
+                return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
+            }
+
+            vec4 pointLight() {
+                vec3 lightVector = lightPosition - position;
+
+                // calculates intensity of light with respect to distance
+                float dist = length(lightVector);
+                float intensity = pointLightAttenuation.x / (pointLightAttenuation.z * dist * dist + pointLightAttenuation.y * dist + pointLightAttenuation.x);
+
+                // diffuse lighting
+                vec3 normal = normalize(normal); // normalize(texture2D(normal0, textureCoordinates).xyz * 2.0f - 1.0);
+                vec3 lightDirection = normalize(lightVector);
+                float diffuse = max(dot(normal, lightDirection), 0.0);
+
+                // specular lighting
+                float specular = 0.0;
+                if (diffuse != 0.0) {
+                    vec3 viewDirection = normalize(cameraPosition - position);
+                    vec3 halfwayVector = normalize(viewDirection + lightDirection);
+                    specular = pow(max(dot(normal, halfwayVector), 0.0), materialShininess);
+                }
+
+                vec4 ambientColor, diffuseColor, specularColor;
+                if (useTexture) {
+                    ambientColor = texture2D(diffuse0, textureCoordinates) * lightAmbience;
+                    diffuseColor = texture2D(diffuse0, textureCoordinates) * diffuse;
+                    specularColor = texture2D(specular0, textureCoordinates) * specular;
+                } else {
+                    ambientColor = vec4(materialAmbient * lightAmbience, 1.0);
+                    diffuseColor = vec4(color * diffuse, 1.0);
+                    specularColor = vec4(materialSpecular * specular, 1.0);
+                }
+
+                return ambientColor + (diffuseColor * lightColor + specularColor) * intensity;
+            }
+
+            vec4 directionalLight() {
+                // normalize light color
+                float maxChannelColor = max(max(lightColor.r, lightColor.g), lightColor.b);
+                float newRed = map(lightColor.r, 0.0, maxChannelColor, 0.0, 1.0);
+                float newGreen = map(lightColor.g, 0.0, maxChannelColor, 0.0, 1.0);
+                float newBlue = map(lightColor.b, 0.0, maxChannelColor, 0.0, 1.0);
+                float newAlpha = clamp(lightColor.a, 0.0, 1.0);
+                vec4 newLightColor = vec4(newRed, newGreen, newBlue, newAlpha);
+
+                // diffuse lighting
+                vec3 normal = normalize(normal);
+                float diffuse = max(dot(normal, -directionalLightDirection), 0.0);
+
+                // specular lighting
+                float specular = 0.0;
+                if (diffuse != 0.0) {
+                    vec3 viewDirection = normalize(cameraPosition - position);
+                    vec3 halfwayVector = normalize(viewDirection - directionalLightDirection);
+                    specular = pow(max(dot(normal, halfwayVector), 0.0), materialShininess);
+                }
+
+                vec4 ambientColor, diffuseColor, specularColor;
+                if (useTexture) {
+                    ambientColor = texture2D(diffuse0, textureCoordinates) * lightAmbience;
+                    diffuseColor = texture2D(diffuse0, textureCoordinates) * diffuse;
+                    specularColor = texture2D(specular0, textureCoordinates) * specular;
+                } else {
+                    ambientColor = vec4(materialAmbient * lightAmbience, 1.0);
+                    diffuseColor = vec4(color, 1.0) * diffuse;
+                    specularColor = vec4(materialSpecular * specular, 1.0);
+                }
+
+                return ambientColor + diffuseColor * newLightColor + specularColor;
+            }
+
+            vec4 spotLight() {
+                // normalize light color
+                float maxChannelColor = max(max(lightColor.r, lightColor.g), lightColor.b);
+                float newRed = map(lightColor.r, 0.0, maxChannelColor, 0.0, 1.0);
+                float newGreen = map(lightColor.g, 0.0, maxChannelColor, 0.0, 1.0);
+                float newBlue = map(lightColor.b, 0.0, maxChannelColor, 0.0, 1.0);
+                float newAlpha = clamp(lightColor.a, 0.0, 1.0);
+                vec4 newLightColor = vec4(newRed, newGreen, newBlue, newAlpha);
+
+                vec3 lightVector = lightPosition - position;
+
+                // calculates intensity of light with respect to distance
+                float dist = length(lightVector);
+                float attenuationIntensity = spotLightAttenuation.x / (spotLightAttenuation.z * dist * dist + spotLightAttenuation.y * dist + spotLightAttenuation.x);
+
+                // diffuse lighting
+                vec3 normal = normalize(normal); // normalize(texture2D(normal0, textureCoordinates).xyz * 2.0f - 1.0);
+                vec3 lightDirection = normalize(lightVector);
+                float diffuse = max(dot(normal, lightDirection), 0.0);
+
+                // specular lighting
+                float specular = 0.0;
+                if (diffuse != 0.0) {
+                    vec3 viewDirection = normalize(cameraPosition - position);
+                    vec3 halfwayVector = normalize(viewDirection + lightDirection);
+                    specular = pow(max(dot(normal, halfwayVector), 0.0), materialShininess);
+                }
+
+                // calculates intensity of the current position based on its angle to the center of the light cone
+                float angle = dot(spotLightDirection, -lightDirection);
+                float coneIntensity = clamp((cos(angle) - cos(spotLightOuterCone)) / (cos(spotLightInnerCone) - cos(spotLightOuterCone)), 0.0, 1.0);
+
+                // combines the intensity of the light with the intensity of the current position
+                float intensity = attenuationIntensity * (1.0 - attenuationIntensity * attenuationIntensity) + coneIntensity * (attenuationIntensity * attenuationIntensity);
+
+                vec4 ambientColor, diffuseColor, specularColor;
+                if (useTexture) {
+                    ambientColor = texture2D(diffuse0, textureCoordinates) * lightAmbience;
+                    diffuseColor = texture2D(diffuse0, textureCoordinates) * diffuse;
+                    specularColor = texture2D(specular0, textureCoordinates) * specular;
+                } else {
+                    ambientColor = vec4(materialAmbient * lightAmbience, 1.0);
+                    diffuseColor = vec4(color, 1.0) * diffuse;
+                    specularColor = vec4(materialSpecular, 1.0) * specular;
+                }
+
+                return ambientColor + (diffuseColor * newLightColor + specularColor) * intensity;
+            }
+
+            void main() {
+                if (lightType == 0) {
+                    if (useTexture) {
+                        gl_FragColor = texture2D(diffuse0, textureCoordinates);
+                    } else {
+                        gl_FragColor = vec4(color, 1.0);
+                    }
+                    return;
+                } else if (lightType == 1) {
+                    gl_FragColor = pointLight();
+                    return;
+                } else if (lightType == 2) {
+                    gl_FragColor = directionalLight();
+                    return;
+                } else if (lightType == 3) {
+                    gl_FragColor = spotLight();
+                    return;
+                }
+            }
+        </script>
+        
+        <script type="text/javascript" src="util/webgl-utils.js"></script>
+        <script type="text/javascript" src="util/initShaders.js"></script>
+        <script type="text/javascript" src="util/MV.js"></script>
+        <script type="text/javascript" src="util/LCS.js"></script>
+        
+        <script type="text/javascript" src="app.js"></script>
+        <script type="text/javascript" src="vao.js"></script>
+        <script type="text/javascript" src="vbo.js"></script>
+        <script type="text/javascript" src="ebo.js"></script>
+        <script type="text/javascript" src="texture.js"></script>
+        <script type="text/javascript" src="objmtl.js"></script>
+        <script type="text/javascript" src="mesh.js"></script>
+        <script type="text/javascript" src="model.js"></script>
+        <script type="text/javascript" src="light.js"></script>
+        <script type="text/javascript" src="camera.js"></script>
+        <script type="text/javascript" src="vertex.js"></script>
+
+        <style>
+            .content {
+                margin: auto;
+                width: 97.5%;
+                padding: 10px;
+                text-align: center;
+                float: center;
+            }
+        </style>
+    </head>
+        
+    <body onload="main()">
+        <div class="content">
+            <h1>LCS Matrix Properties Explorer</h1>
+            <div style="width: 30%; margin-top: 0.5%; margin-left: 6.25%; float: left;">
+                <canvas id="window" width="800" height="600">
+                    Your browser does not support HTML5
+                </canvas>
+                <br />
+                <div style="width: 184%">
+                    <label id="cameraInformation"></label>
+                </div>
+                <br />
+            </div>
+            <div style="width: 30%; margin-right: 6.25%; float: right;">
+                <div id="matrixDimensions" style="border: 1px solid black;">
+                    <h4>Matrix Dimensions:</h4>
+                    <label for="n">n: </label>
+                    <input type="number" id="n" name="n" min="1" max="5" />
+                    <label for="m">m: </label>
+                    <input type="number" id="m" name="m" min="1" max="5" />
+                    <br /><br />
+                    <button onclick="changeMatrix()">Update Matrix</button>
+                    <br /><br />
+
+                    <!-- prevent typing -->
+                    <script>
+                        document.getElementById("n").addEventListener("keydown", function (e) {
+                            e.preventDefault();
+                        });
+                        document.getElementById("m").addEventListener("keydown", function (e) {
+                            e.preventDefault();
+                        });
+                    </script>
+                </div>
+                <br /><br />
+                <div id="lcsInformation" style="border: 1px solid black;">
+                    <h4>Enter Two Strings:</h4>
+                    &nbsp;&nbsp; <input type="text" id="x-box" name="x" size="10">
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                    <input type="text" id="y-box" name="y" size="10"> &nbsp;&nbsp;
+                    <br /><br />
+                    <button id="lcs-button" onclick="changeLCS()">Update LCS</button>
+                    <br /><br />
+                    <label id="lcs-length">Length of Longest Common Subsequence: 0</label>
+                    <br />
+                    <label id="lcs-set">Set of Longest Common Subsequences: {}</label>
+                    <br /><br />
+                </div>
+                <br /><br />
+                <div id="compareLCS" style="border: 1px solid black;">
+                    <h4>kth Character Effect:</h4>
+                    k: <input type="text" id="k-box" name="k" size="5"> &nbsp;&nbsp;
+                    <button id="k-button" onclick="changeK()">Update k</button>
+                    <br /><br />
+                    <label id="zBox">New Second String: -</label>
+                    <br /><br />
+                    <label id="k-length">Length of Longest Common Subsequence: 0</label>
+                    <br />
+                    <label id="k-set">Set of Longest Common Subsequences: {}</label>
+                    <br /><br />
+                </div>
+            </div>
+            <div style="clear: both;"></div>
+            <div>
+                <h3>How To Use:</h3>
+                WASD - Move camera <br />
+                Q/E - Move camera up/down <br />
+                Mouse - Rotate camera <br />
+                Z - Toggle Perspective/Orthographic View <br />
+                R - Reset Camera <br />
+            </div>
+        </div>
+    </body>
+</html>

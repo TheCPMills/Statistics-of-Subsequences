@@ -1,0 +1,7 @@
+{
+    "java.project.sourcePaths": ["LWJGL Code/src"],
+    "java.project.outputPath": "LWJGL Code/bin",
+    "java.project.referencedLibraries": [
+        "LWJGL Code/lib/**/*.jar"
+    ],
+}
