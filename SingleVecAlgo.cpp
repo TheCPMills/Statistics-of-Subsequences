@@ -27,11 +27,7 @@ const uint64_t powminus2 = uint64_t(1) << ((2 * length) - 2);
 
 // make sure to pass by reference, not by value
 // https://eigen.tuxfamily.org/dox/group__TopicPassingByValue.html
-// TODO: look into using Ref's
-
-// TODO: define length at the top here (#define length NUMBER), remove length as argument anywhere
-// already tested this, verified it does indeed reduce computation time
-// if pow is static, then i think most (all?) the arrays can be static sized
+// TODO: look into using Ref's (or smart pointers?)
 
 // Seems like they actually recommend using dynamic arrays for large sizes
 // even if you know the size at compile time.
@@ -43,6 +39,11 @@ const uint64_t powminus2 = uint64_t(1) << ((2 * length) - 2);
 // See https://eigen.tuxfamily.org/dox/TopicPreprocessorDirectives.html for flags to consider
 // E.g., EIGEN_NO_DEBUG (currently set at top, but idk if I'm using it right?)
 // May be possible to get around stack size issues with this. Unsure if good idea?
+
+// TODO: see if -m64 compile flag matters
+// TODO: check if can use https://eigen.tuxfamily.org/dox/TopicUsingIntelMKL.html
+
+// TODO: see if you can take advantage of symmetry (1's complement operator ~)
 
 void printArray(const ArrayXd &arr) {
     for (int i = 0; i < arr.size(); i++) {
@@ -57,9 +58,11 @@ void printArray(const ArrayXd &arr) {
 // }
 
 void F_01(const ArrayXd &v, ArrayXd &ret) {
+    cout << "Has memory here" << endl;
+    cout.flush();
     ret = ArrayXd::Zero(powminus1);
-    // cout << "snarf6" << endl;
-    // cout.flush();
+    cout << "Ran out of memory before here" << endl;
+    cout.flush();
 
     // TODO: Make these uint64_t
     const uint64_t start = powminus2;
@@ -120,11 +123,7 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
 void F(const ArrayXd &v1, const ArrayXd &v2, ArrayXd &ret) {
     // try a potential optimization? perform 0.5* locally?
     ArrayXd f01f11;
-    // cout << "snarf4" << endl;
-    // cout.flush();
     F_01(v1, f01f11);  // contains both f01 and f11 back to back
-    // cout << "snarf5" << endl;
-    // cout.flush();
     // reverses f11
     f01f11(Eigen::seq(powminus2, powminus1 - 1)).reverseInPlace();
 
