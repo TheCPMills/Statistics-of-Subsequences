@@ -10,9 +10,9 @@ using namespace std;
 using Eigen::Array;
 using Eigen::ArrayXd;
 
-#define length 16
+#define length 17
 
-const bool PRINT_EVERY_ITER = false;
+const bool PRINT_EVERY_ITER = true;
 
 // equal to pow(2, 2 * length)
 const uint64_t powminus0 = uint64_t(1) << (2 * length);
@@ -70,9 +70,9 @@ void F_01(const ArrayXd &v, ArrayXd &ret) {
 
     // maybe convert into bitvec
     for (uint64_t str = start; str < end; str++) {
-        const uint64_t A = str & 0xAAAAAAAA;
+        const uint64_t A = str & 0xAAAAAAAAAAAAAAAA;
         // the & is to just get rid of first character
-        const uint64_t TB = (str & 0x55555555) & ((uint64_t(1) << (2 * length - 2)) - 1);
+        const uint64_t TB = (str & 0x5555555555555555) & ((uint64_t(1) << (2 * length - 2)) - 1);
         uint64_t ATB0 = A | (TB << 2);
         uint64_t ATB1 = ATB0 | 1;  // 0b1 <- the smallest bit in B is set to 1
 
@@ -84,8 +84,8 @@ void F_01(const ArrayXd &v, ArrayXd &ret) {
 
     // from halfway to 3/4 of way
     for (uint64_t str = end; str < 3 * start; str++) {
-        const uint64_t TA = (str & 0xAAAAAAAA) & ((uint64_t(1) << (2 * length - 1)) - 1);
-        const uint64_t B = str & 0x55555555;
+        const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & ((uint64_t(1) << (2 * length - 1)) - 1);
+        const uint64_t B = str & 0x5555555555555555;
         uint64_t TA0B = (TA << 2) | B;
         uint64_t TA1B = TA0B | 2;
 
@@ -102,8 +102,8 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
     // ret = ArrayXd::Zero(powminus2);
     for (uint64_t str = 0; str < powminus2; str++) {
         // TODO: LENGTHEN THESE FIXED STRINGS
-        const uint64_t TA = (str & 0xAAAAAAAA) & ((uint64_t(1) << (2 * length - 1)) - 1);
-        const uint64_t TB = (str & 0x55555555) & ((uint64_t(1) << (2 * length - 2)) - 1);
+        const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & ((uint64_t(1) << (2 * length - 1)) - 1);
+        const uint64_t TB = (str & 0x5555555555555555) & ((uint64_t(1) << (2 * length - 2)) - 1);
         uint64_t TA0TB0 = (TA << 2) | (TB << 2);
         uint64_t TA0TB1 = TA0TB0 | 0b1;
         uint64_t TA1TB0 = TA0TB0 | 0b10;
@@ -135,6 +135,8 @@ void F(const ArrayXd &v1, const ArrayXd &v2, ArrayXd &ret) {
 
     // The second array has its elements reversed (iterated in reverse order)
     // The .eval() is necessary to prevent aliasing issues.
+
+    // mmap can do 2GB at once
     ret(Eigen::seq(powminus2, powminus1 - 1)) =
         0.5 * (ret(Eigen::seq(0, powminus2 - 1)).max(ret(Eigen::seq(powminus1 - 1, powminus2, -1))).eval());
 
@@ -178,6 +180,7 @@ void F_withplusR(double R, ArrayXd &v2, ArrayXd &ret) {
 void FeasibleTriplet(int n) {
     // TODO: time benchmarking for each part
     //  ArrayXd v0 = ArrayXd::Zero(powminus1);
+    auto start = std::chrono::system_clock::now();
     ArrayXd v1 = ArrayXd::Zero(powminus1);
 
     // ArrayXd u = ArrayXd::Zero(powminus1);  // is u ever used? get rid of it?
@@ -231,8 +234,11 @@ void FeasibleTriplet(int n) {
             cout << "At n=" << i << ": " << (2.0 * r / (1 + r)) + 2.0 * (r - e) / (1 + (r - e)) << endl;
             // cout << "At n=" << i << ": " << 2.0 * (e - r) / (1 + (e - r)) << endl;
             // cout << "At n=" << i << ": " << 2.0 * (e - r) << endl;
-            cout << "R, E: " << R << " " << E << endl;
-            cout << (2.0 * r / (1 + r)) << endl;
+            // cout << "R, E: " << R << " " << E << endl;
+            // cout << (2.0 * r / (1 + r)) << endl;
+            auto end = std::chrono::system_clock::now();
+            std::chrono::duration<double> elapsed_seconds = end - start;
+            cout << "Elapsed time: " << elapsed_seconds.count() << endl;
         }
 
         // cout << r << " " << R << endl;
@@ -247,7 +253,7 @@ void FeasibleTriplet(int n) {
 int main() {
     cout << "Starting with l = " << length << "..." << endl;
     auto start = std::chrono::system_clock::now();
-    FeasibleTriplet(100);
+    FeasibleTriplet(200);
     auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     cout << "Elapsed time: " << elapsed_seconds.count() << endl;
