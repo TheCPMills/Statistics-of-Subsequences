@@ -16,23 +16,6 @@ const int powminus1 = 1 << ((2 * length) - 1);
 // equal to pow(2, 2 * length - 2)
 const int powminus2 = 1 << ((2 * length) - 2);
 
-// TODO: in all array accesses, get rid of range checking
-// https://eigen.tuxfamily.org/dox/group__QuickRefPage.html
-
-// TODO: could maybe reduced computation by replacing length arugment with static variables
-// or using constexpr's (e.g. for the pow variables)
-// also, just declare things as constant in general
-// make sure to pass by reference, not by value
-// https://eigen.tuxfamily.org/dox/group__TopicPassingByValue.html
-
-// TODO: define length at the top here (#define length NUMBER), remove length as argument anywhere
-// already tested this, verified it does indeed reduce computation time
-// if pow is static, then i think most (all?) the arrays can be static sized
-
-// Seems like they actually recommend using dynamic arrays for large sizes
-// even if you know the size at compile time.
-// https://eigen.tuxfamily.org/dox/group__TutorialMatrixClass.html
-
 void printArray(const ArrayXd &arr) {
     for (int i = 0; i < arr.size(); i++) {
         cout << arr[i] << " ";

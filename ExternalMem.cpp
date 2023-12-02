@@ -33,36 +33,14 @@ const uint64_t powminus2 = uint64_t(1) << ((2 * length) - 2);
 // define the size of the file needed to store a single full vector
 const uint64_t FILESIZE = powminus1 * sizeof(double);
 
-// TODO: in all array accesses, get rid of range checking
-// https://eigen.tuxfamily.org/dox/group__QuickRefPage.html
-// (what's difference between vec[i] and vec(i)?)
-
-// make sure to pass by reference, not by value
-// https://eigen.tuxfamily.org/dox/group__TopicPassingByValue.html
-// TODO: look into using Ref's (or smart pointers?)
-
-// Seems like they actually recommend using dynamic arrays for large sizes
-// even if you know the size at compile time.
-// https://eigen.tuxfamily.org/dox/group__TutorialMatrixClass.html
-
-// TODO: figure out if this matters
-// https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
-
-// See https://eigen.tuxfamily.org/dox/TopicPreprocessorDirectives.html for flags to consider
-// E.g., EIGEN_NO_DEBUG (currently set at top, but idk if I'm using it right?)
-// May be possible to get around stack size issues with this. Unsure if good idea?
-
-// TODO: see if -m64 compile flag matters
-// TODO: check if can use https://eigen.tuxfamily.org/dox/TopicUsingIntelMKL.html
-
-// TODO: see if you can take advantage of symmetry (1's complement operator ~)
-
 void printArray(const ArrayXd &arr) {
     for (int i = 0; i < arr.size(); i++) {
         cout << arr[i] << " ";
     }
     cout << endl;
 }
+
+// NOTE: mmap can only do up to 2GB at once. Will need to have many mmaps.
 
 // Try these flags for faster? https://stackoverflow.com/questions/8056984/speeding-up-file-i-o-mmap-vs-read?rq=4
 // https://stackoverflow.com/questions/55379852/fast-file-reading-in-c-comparison-of-different-strategies-with-mmap-and-std
