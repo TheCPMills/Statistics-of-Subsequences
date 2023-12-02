@@ -246,7 +246,6 @@ void FeasibleTriplet(int n) {
 
     // return u, r, e
     cout << "Result: " << 2.0 * (r - e) << endl;
-    // TODO: ENSURE ROUNDS DOWN
     cout << "Testing New Result: " << 2.0 * r / (1 + r) << endl;
 }
 
