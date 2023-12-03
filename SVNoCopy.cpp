@@ -10,7 +10,7 @@ using namespace std;
 using Eigen::Array;
 using Eigen::ArrayXd;
 
-#define length 2
+#define length 14
 
 const bool PRINT_EVERY_ITER = true;
 
@@ -36,7 +36,7 @@ void printArray(const ArrayXd &arr) {
 void F_01(const ArrayXd &v, ArrayXd &ret) {
     // cout << "Has memory here" << endl;
     // cout.flush();
-    ret = ArrayXd::Zero(powminus1);
+    // ret = ArrayXd::Zero(powminus1);  // technically not necessary I think
     // cout << "Ran out of memory before here" << endl;
     // cout.flush();
 
