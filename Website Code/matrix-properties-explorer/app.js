@@ -23,6 +23,8 @@ var lights = [];
 // ===============================
 // ==== CAMERA INITIALIZATION ====
 // ===============================
+var orthoSize;
+var perspectiveStart;
 var perspectiveMatrix, orthoMatrix;
 var perspectiveEye, orthoEye;
 var perspectiveOrientation, orthoOrientation;
@@ -102,13 +104,13 @@ function main() {
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
-    gl.frontFace(gl.CW);
+    gl.frontFace(gl.CCW);
 
     // set background color
     gl.clearColor(0.9, 0.9, 0.9, 1.0);
 
     // initialize and activate shader program
-    shaderProgram = initShaders(gl, "vertexShader", "fragmentShader");
+    shaderProgram = createShaderProgram(gl, "vertexShader", "fragmentShader");
     gl.useProgram(shaderProgram);
 
     // Initialize models, lighting, and camera
@@ -123,6 +125,10 @@ function main() {
 
     // render the scene
     render();
+}
+
+function setup() {
+    // if on a mobile device
 }
 
 function render() {
@@ -211,22 +217,23 @@ function toggleCameraType() {
 
 function initializeMLC(shader) {
     // model initialization
-    objectModel = new Model("model_" + m + "x" + n + ".obj", shader);
+    objectModel = new Model("model_" + n + "x" + m + ".obj", shader);
 
     // Generate model matrix
     var offset = vec3(-Math.pow(2, n - 1), 0, -Math.pow(2, m - 1));
-    modelMatrix = mult(rotateAxis(90.0, vec3(0.0, -1.0, 0.0)), translate(offset));
+    var reflectionPlane = vec4(1.0, 0.0, 0.0, 0.0);
+    modelMatrix = mult(reflectionMatrix(reflectionPlane), translationMatrix(offset));
 
     // lighting initialization
     lights.push(new PointLight(vec3(0.0, Math.min(n, m) + 1.0, 0.0), vec3(2.0, 1.5, 0.5), 0.5, vec4(1.0, 0.98, 1.0, 1.0)));
 
     // camera initialization
-    var orthoSize = n * m + 1;
-    var perspectiveStart = vec3(-Math.pow(2, n), Math.pow(2, Math.min(n, m)), -Math.pow(2, m));
+    orthoSize = Math.pow(2, Math.max(n, m) - 1.0) + 1.0;
+    perspectiveStart = vec3(0.0, Math.min(n, m) + 1, -(0.5 * n + 2.0 + Math.pow(2, m - 1)));
 
     perspectiveMatrix = perspective(70.0, width / height, 0.1, 100.0);
     perspectiveEye = vec3(perspectiveStart[0], perspectiveStart[1], perspectiveStart[2]);
-    perspectiveOrientation = vec3(-1.0, 1.0, -1.0);
+    perspectiveOrientation = vec3(0.0, 4.0, -8.0);
     perspectiveUp = vec3(0.0, 1.0, 0.0);
     orthoMatrix = ortho(-orthoSize * aspectRatio, orthoSize * aspectRatio, -orthoSize, orthoSize, 0.1, 100.0);
     orthoEye = vec3(0, orthoSize, 0);
@@ -243,6 +250,19 @@ function changeMatrix() {
 
     n = parseInt(nInput.value);
     m = parseInt(mInput.value);
+
+    // if n or m is not a number
+    if (isNaN(n) || isNaN(m) || n < 1 || m < 1 || n > 5 || m > 5) {
+        alert("Invalid dimensions. Please enter dimensions between 1 and 5.");
+        return;
+    }
+
+    if (n >= 4 || m >= 4) {
+        var answer = confirm("Larger models may take longer than usual to render.\nWould you like to continue?");
+        if (!answer) {
+            return;
+        }
+    }
 
     xBox.value = "";
     yBox.value = "";
@@ -261,6 +281,8 @@ function changeMatrix() {
     camera.isPerspective = true;
     time = -1.0;
     alpha = 0.01 * Math.min(n, m);
+
+    console.log(camera.projectionMatrix);
 }
 
 function changeLCS() {
@@ -269,17 +291,17 @@ function changeLCS() {
     var y = parseInt(yBox.value, 2);
 
     // select mesh
-    var index = x + y * Math.pow(2, n);
+    var index = x * Math.pow(2, m) + y;
     objectModel.select(index);
 
     var lcsLength = objectModel.meshes[index].vertices[0].position[1];
-    var lcsSet = findAllLCS(xBox.value, yBox.value);
+    var setOfLCSs = Array.from(lcsSet(xBox.value, yBox.value));
 
     var lcsLengthLabel = document.getElementById("lcs-length");
     lcsLengthLabel.innerHTML = "Length of Longest Common Subsequence: " + lcsLength;
 
     var lcsSetLabel = document.getElementById("lcs-set");
-    lcsSetLabel.innerHTML = "Set of Longest Common Subsequences: {" + lcsSet + "}";
+    lcsSetLabel.innerHTML = "Set of Longest Common Subsequences: {" + setOfLCSs + "}";
 
     lcsGenerated = true;
     var k = parseInt(kBox.value);
@@ -296,7 +318,7 @@ function changeK() {
     var y = parseInt(yBox.value, 2);
 
     // complement kth bit from left
-    var z = y ^ (1 << (yBox.value.length- 1 - k));
+    var z = y ^ (1 << (yBox.value.length - 1 - k));
     var zBox = z.toString(2);
 
     // pad with zeros
@@ -307,17 +329,17 @@ function changeK() {
     document.getElementById("zBox").innerHTML = "New Second String: " + zBox;
 
     // select mesh
-    var index = x + z * Math.pow(2, n);
+    var index = x * Math.pow(2, m) + z;
     objectModel.selectK(index);
 
     var lcsLength = objectModel.meshes[index].vertices[0].position[1];
-    var lcsSet = findAllLCS(xBox.value, zBox);
+    var setOfLCSs = Array.from(lcsSet(xBox.value, zBox));
 
     var kLengthLabel = document.getElementById("k-length");
     kLengthLabel.innerHTML = "Length of Longest Common Subsequence: " + lcsLength;
 
     var kSetLabel = document.getElementById("k-set");
-    kSetLabel.innerHTML = "Set of Longest Common Subsequences: {" + lcsSet + "}";
+    kSetLabel.innerHTML = "Set of Longest Common Subsequences: {" + setOfLCSs + "}";
 }
 
 var wPressed = false;
@@ -393,6 +415,20 @@ document.onkeydown = function (event) {
                 if (dPressed) {
                     camera.setPosition(add(camera.position, scale(-camera.speed, vec3(1.0, 0.0, 0.0))));
                 }
+                if (spacePressed) {
+                    orthoSize += 0.1 * Math.min(n, m);
+                    orthoEye = vec3(0, orthoSize, 0);
+                    orthoMatrix = ortho(-orthoSize * aspectRatio, orthoSize * aspectRatio, -orthoSize, orthoSize, 0.1, 100.0);
+                    camera.projectionMatrix = orthoMatrix;
+                    camera.setPosition(orthoEye);
+                }
+                if (shiftPressed) {
+                    orthoSize -= 0.1 * Math.min(n, m);
+                    orthoEye = vec3(0, orthoSize, 0);
+                    orthoMatrix = ortho(-orthoSize * aspectRatio, orthoSize * aspectRatio, -orthoSize, orthoSize, 0.1, 100.0);
+                    camera.projectionMatrix = orthoMatrix;
+                    camera.setPosition(orthoEye);
+                }
             }
         }
     }
@@ -458,3 +494,35 @@ document.onmousemove = function (event) {
         }
     }
 }
+
+document.addEventListener("touchstart", function (event) {
+    if (!isAnimating && !mouseDown && isPerspective) {
+        canvas.style.cursor = "none";
+        mouseLastX = event.touches[0].clientX;
+        mouseLastY = event.touches[0].clientY;
+        mouseDown = true;
+    }
+});
+
+document.addEventListener("touchend", function (event) {
+    if (!isAnimating && mouseDown && isPerspective) {
+        canvas.style.cursor = "default";
+        mouseDown = false;
+    }
+});
+
+document.addEventListener("touchmove", function (event) {
+    if (!isAnimating && mouseDown) {
+        var mouseX = event.touches[0].clientX;
+        var mouseY = event.touches[0].clientY;
+
+        var rotX = camera.sensitivity * (mouseX - mouseLastX) / 100;
+        var rotY = camera.sensitivity * (mouseY - mouseLastY) / 100;
+
+        camera.setOrientation(rotate(camera.orientation, vec3(0.0, 1.0, 0.0), radians(-rotX)));
+        camera.setOrientation(rotate(camera.orientation, normalize(cross(camera.orientation, camera.worldUp)), radians(rotY)));
+
+        mouseLastX = mouseX;
+        mouseLastY = mouseY;
+    }
+});

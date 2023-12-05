@@ -216,12 +216,13 @@
             }
         </script>
         
-        <script type="text/javascript" src="util/webgl-utils.js"></script>
-        <script type="text/javascript" src="util/initShaders.js"></script>
+        <script type="text/javascript" src="util/setup.js"></script>
+        <!-- <script type="text/javascript" src="util/glm.js"></script> -->
         <script type="text/javascript" src="util/MV.js"></script>
         <script type="text/javascript" src="util/LCS.js"></script>
         
         <script type="text/javascript" src="app.js"></script>
+        <script type="text/javascript" src="shader.js"></script>
         <script type="text/javascript" src="vao.js"></script>
         <script type="text/javascript" src="vbo.js"></script>
         <script type="text/javascript" src="ebo.js"></script>
@@ -261,22 +262,13 @@
                 <div id="matrixDimensions" style="border: 1px solid black;">
                     <h4>Matrix Dimensions:</h4>
                     <label for="n">n: </label>
-                    <input type="number" id="n" name="n" min="1" max="5" />
+                    <input type="number" id="n" name="n" min="1" max="10" />
                     <label for="m">m: </label>
-                    <input type="number" id="m" name="m" min="1" max="5" />
+                    <input type="number" id="m" name="m" min="1" max="10" />
                     <br /><br />
                     <button onclick="changeMatrix()">Update Matrix</button>
                     <br /><br />
 
-                    <!-- prevent typing -->
-                    <script>
-                        document.getElementById("n").addEventListener("keydown", function (e) {
-                            e.preventDefault();
-                        });
-                        document.getElementById("m").addEventListener("keydown", function (e) {
-                            e.preventDefault();
-                        });
-                    </script>
                 </div>
                 <br /><br />
                 <div id="lcsInformation" style="border: 1px solid black;">
@@ -307,7 +299,7 @@
                 </div>
             </div>
             <div style="clear: both;"></div>
-            <div>
+            <div id="Controls">
                 <h3>How To Use:</h3>
                 WASD - Move camera <br />
                 Q/E - Move camera up/down <br />

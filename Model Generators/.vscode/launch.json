@@ -1,0 +1,32 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "MatrixModelGenerator",
+            "request": "launch",
+            "mainClass": "MatrixModelGenerator",
+            "projectName": "Model Generators_e0211973"
+        },
+        {
+            "type": "java",
+            "name": "BinaryStringModelGenerator",
+            "request": "launch",
+            "mainClass": "BinaryStringModelGenerator",
+            "projectName": "Model Generators_e0211973"
+        },
+        {
+            "type": "java",
+            "name": "ModelGenerator",
+            "request": "launch",
+            "mainClass": "ModelGenerator",
+            "projectName": "LWJGL Code_c2bf6c45"
+        },
+        {
+            "type": "java",
+            "name": "BinaryStringModelGenerator",
+            "request": "launch",
+            "mainClass": "BinaryStringModelGenerator",
+            "projectName": "LWJGL Code_c2bf6c45"
+        }
+    ]
+}

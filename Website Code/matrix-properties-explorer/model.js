@@ -30,13 +30,17 @@ class Model {
     }
 
     deselect() {
-        this.meshes[this.selectedMesh].deselect();
-        this.selectedMesh = -1;
+        if (this.selectedMesh != -1) {
+            this.meshes[this.selectedMesh].deselect();
+            this.selectedMesh = -1;
+        }
     }
 
     deselectK() {
-        this.meshes[this.kSelectedMesh].deselect();
-        this.kSelectedMesh = -1;
+        if (this.kSelectedMesh != -1) {
+            this.meshes[this.kSelectedMesh].deselect();
+            this.kSelectedMesh = -1;
+        }
     }
 
     deselectAll() {

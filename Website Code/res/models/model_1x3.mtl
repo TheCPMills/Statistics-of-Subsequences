@@ -18,3 +18,12 @@ Ni 1.45
 d 1.0
 illum 2
 
+newmtl string_label
+Ka 0.0 0.0 0.0
+Kd 0.0 0.0 0.0
+Ks 0.0 0.0 0.0
+Ke 0.0 0.0 0.0
+Ns 10.0
+Ni 1.45
+d 1.0
+illum 2

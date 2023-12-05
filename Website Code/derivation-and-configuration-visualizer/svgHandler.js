@@ -333,14 +333,14 @@ function displayLCSInformation(x, y, lcs) {
         if (xCell.innerHTML != "") {
             xCell.innerHTML += "<br>";
         }
-        xCell.innerHTML += x.split('').map((char, index) => configurationX.includes(index) ? char : "_").join('');
+        xCell.innerHTML += x.split('').map((char, index) => configurationX.includes(index) ? "<span class=\"included\">" + char + "</span>" : char).join('');
     }
 
     for (let configurationY of configurationsY) {
         if (yCell.innerHTML != "") {
             yCell.innerHTML += "<br>";
         } 
-        yCell.innerHTML += y.split('').map((char, index) => configurationY.includes(index) ? char : "_").join('');
+        yCell.innerHTML += y.split('').map((char, index) => configurationY.includes(index) ? "<span class=\"included\">" + char + "</span>" : char).join('');
     }
 
     row.appendChild(xCell);

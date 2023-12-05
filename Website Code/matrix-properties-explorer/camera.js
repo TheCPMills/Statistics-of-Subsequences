@@ -12,17 +12,17 @@ class GenericCamera {
 
     setPosition(eye) {
         this.position = eye;
-        this.target = subtract(this.position, this.orientation);
+        this.target = sub(this.position, this.orientation);
     }
 
     setTarget(target) {
         this.target = target;
-        this.orientation = normalize(subtract(this.position, this.target));
+        this.orientation = normalize(sub(this.position, this.target));
     }
 
     setOrientation(orientation) {
         this.orientation = normalize(orientation);
-        this.target = subtract(this.position, this.orientation);
+        this.target = sub(this.position, this.orientation);
     }
 
     setWorldUp(worldUp) {
