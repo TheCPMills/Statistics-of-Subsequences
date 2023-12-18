@@ -5,11 +5,13 @@
 #include <chrono>
 #include <cmath>
 #include <ctime>
+#include <future>
 #include <iostream>
 #include <thread>
-using namespace std;
 using Eigen::Array;
 using Eigen::ArrayXd;
+using std::cout;
+using std::endl;
 
 #define length 6
 #define NUM_THREADS 4
@@ -35,6 +37,34 @@ void printArray(const ArrayXd &arr) {
 //     double prev = 0.0;
 //     if (prev == 0.0 || tol-prev > )
 // }
+
+/* Normally, we find R with R = (v2 - v1).maxCoeff();
+    However, this is slower than the multithreaded F functions if not parallelized!
+    So instead we break that calculation up across threads.*/
+double findR_parallel(const ArrayXd &v1, const ArrayXd &v2) {
+    std::future<double> maxVals[NUM_THREADS];
+    uint64_t incr = powminus1 / NUM_THREADS;
+
+    // Function to calculate the maximum coefficient in a particular (start...end) slice
+    auto findMax = [](uint64_t start, uint64_t end, const ArrayXd &v1, const ArrayXd &v2) {
+        return (v2(Eigen::seq(start, end - 1)) - v1(Eigen::seq(start, end - 1))).maxCoeff();
+    };
+
+    // Set threads to calculate the max coef in their own smaller slices
+    for (int i = 0; i < NUM_THREADS; i++) {
+        maxVals[i] = std::async(std::launch::async, findMax, incr * i, incr * (i + 1), std::cref(v1), std::cref(v2));
+    }
+
+    // Now calculate the global max
+    double R = maxVals[0].get();  // .get() waits until the thread completes
+    for (int i = 1; i < NUM_THREADS; i++) {
+        double coef = maxVals[i].get();
+        if (coef > R) {
+            R = coef;
+        }
+    }
+    return R;
+}
 
 void F_01_loop1(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret) {
     for (uint64_t str = start; str < end; str++) {
@@ -74,17 +104,16 @@ void F_01_loop2(const uint64_t start, const uint64_t end, const ArrayXd &v, Arra
 void F_01(const ArrayXd &v, ArrayXd &ret) {
     const uint64_t start = powminus2;
     const uint64_t end = powminus1;
-    thread threads[NUM_THREADS];
-    const uint64_t threadIncr = (end - start) / (NUM_THREADS);
+    std::thread threads[NUM_THREADS];
+    const uint64_t incr = (end - start) / (NUM_THREADS);
     for (int i = 0; i < NUM_THREADS; i++) {
-        threads[i] =
-            thread(F_01_loop1, start + threadIncr * i, start + threadIncr * (i + 1), std::cref(v), std::ref(ret));
+        threads[i] = std::thread(F_01_loop1, start + incr * i, start + incr * (i + 1), std::cref(v), std::ref(ret));
     }
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i].join();
     }
     for (int i = 0; i < NUM_THREADS; i++) {
-        threads[i] = thread(F_01_loop2, end + threadIncr * i, end + threadIncr * (i + 1), std::cref(v), std::ref(ret));
+        threads[i] = std::thread(F_01_loop2, end + incr * i, end + incr * (i + 1), std::cref(v), std::ref(ret));
     }
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i].join();
@@ -95,10 +124,10 @@ void F_01(const ArrayXd &v, ArrayXd &ret) {
 
 void F_12(const ArrayXd &v, ArrayXd &ret) {
     // ret = ArrayXd::Zero(powminus2);
-    thread threads[NUM_THREADS];
+    std::thread threads[NUM_THREADS];
     const uint64_t start = 0;
     const uint64_t end = powminus2;
-    const uint64_t threadIncr = (end - start) / (NUM_THREADS);  // Careful to make sure NUM_THREADS is a divisor!
+    const uint64_t incr = (end - start) / (NUM_THREADS);  // Careful to make sure NUM_THREADS is a divisor!
     auto loop = [](uint64_t start, uint64_t end, const ArrayXd &v, ArrayXd &ret) {
         for (uint64_t str = start; str < end; str++) {
             const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & ((uint64_t(1) << (2 * length - 1)) - 1);
@@ -121,7 +150,7 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
         }
     };
     for (int i = 0; i < NUM_THREADS; i++) {
-        threads[i] = thread(loop, start + threadIncr * i, start + threadIncr * (i + 1), std::cref(v), std::ref(ret));
+        threads[i] = std::thread(loop, start + incr * i, start + incr * (i + 1), std::cref(v), std::ref(ret));
     }
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i].join();
@@ -192,7 +221,7 @@ void FeasibleTriplet(int n) {
 
         start2 = std::chrono::system_clock::now();
         // TODO: if this uses a vector of mem temporarily, store v2-v1 into v1?
-        double R = (v2 - v1).maxCoeff();
+        double R = findR_parallel(v1, v2);
         end = std::chrono::system_clock::now();
         elapsed_seconds = end - start2;
         cout << "Elapsed time (s) mc1: " << elapsed_seconds.count() << endl;
