@@ -65,38 +65,31 @@ double findR_parallel(const ArrayXd &v1, const ArrayXd &v2) {
     return R;
 }
 
-// void elementwise_max_parallel(ArrayXd &ret) {
-//     // start of second half of array is powminus2
-//     const uint64_t middle = powminus2;
+/*  Takes the elementwise maximum of f01 (first half of ret) and f11 (second half of ret), and
+    fills the second halfof the ret vector with the result (multiplied by 0.5). Afterward, first
+    half of ret vector can be safely overwritten. Does so in a parallelized fashion, since this
+    can be quite slow.
+    Also adds 2*R. Can set R to 0 to not add anything (as in F).*/
+void elementwise_max_parallel(ArrayXd &ret, const double R) {
+    // start of second half of array is powminus2
+    const uint64_t middle = powminus2;
 
-//     // ret(Eigen::seq(powminus2, powminus1 - 1)) =
-//     //     0.5 * (ret(Eigen::seq(0, powminus2 - 1)).max(ret(Eigen::seq(powminus1 - 1, powminus2, -1))).eval()) + 2 *
-//     R;
+    // TODO: benchmark if adding R always (but 0 half the time) is slower than only adding R
+    // in a separate function.
+    auto elementwise_max = [R](uint64_t start, uint64_t end, ArrayXd &ret) {
+        ret(Eigen::seq(middle + start, middle + end - 1)) =
+            0.5 * ret(Eigen::seq(start, end - 1)).max(ret(Eigen::seq(middle + start, middle + end - 1))) + 2 * R;
+    };
 
-//     // TODO: check if doing the first part of the assigment backwards i.e. changing (powminus2, powminus-1) to be
-//     // backwards avoids needs for .eval() [that may mess up order]
-//     auto elementwise_max = [](uint64_t start, uint64_t end, ArrayXd &ret) {
-//         // TODO: check if can remove .eval()
-//         ret(Eigen::seq(middle + start, middle + end - 1)) =
-//             0.5 *
-//             ret(Eigen::seq(start, end - 1)).max(ret(Eigen::seq(powminus1 - 1 - start, powminus1 - end, -1))).eval();
-//     };
-
-//     std::thread threads[NUM_THREADS];
-//     const uint64_t incr = (powminus2) / (NUM_THREADS);
-//     for (int i = 0; i < NUM_THREADS; i++) {
-//         threads[i] = std::thread(elementwise_max, incr * i, incr * (i + 1), std::ref(ret));
-//     }
-//     for (int i = 0; i < NUM_THREADS; i++) {
-//         threads[i].join();
-//     }
-//     for (int i = 0; i < NUM_THREADS; i++) {
-//         threads[i] = std::thread(F_01_loop2, end + incr * i, end + incr * (i + 1), std::cref(v), std::ref(ret));
-//     }
-//     for (int i = 0; i < NUM_THREADS; i++) {
-//         threads[i].join();
-//     }
-// }
+    std::thread threads[NUM_THREADS];
+    const uint64_t incr = (powminus2) / (NUM_THREADS);
+    for (int i = 0; i < NUM_THREADS; i++) {
+        threads[i] = std::thread(elementwise_max, incr * i, incr * (i + 1), std::ref(ret));
+    }
+    for (int i = 0; i < NUM_THREADS; i++) {
+        threads[i].join();
+    }
+}
 
 void F_01_loop1(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret) {
     for (uint64_t str = start; str < end; str++) {
@@ -129,11 +122,11 @@ void F_01_loop2(const uint64_t start, const uint64_t end, const ArrayXd &v, Arra
         TA0B = std::min(TA0B, (powminus0 - 1) - TA0B);
         TA1B = std::min(TA1B, (powminus0 - 1) - TA1B);
 
-        // The below line is normally ret[str - powminus2] = v[TA0B] + v[TA1B];
-        // However, the values from this part get reversed afterwards. So, instead,
-        // we do the reversing here locally to avoid the need for that (it allows
-        // us to avoid needing to copy things when multithreading later).
-        // (3*powminus2 -(str-powminus2) = powminus0-str)
+        /* The below line is normally ret[str - powminus2] = v[TA0B] + v[TA1B];
+        However, the values from this part get reversed afterwards. So, instead,
+        we do the reversing here locally to avoid the need for that (it allows
+        us to avoid needing to copy things when multithreading later in elementwise_max).
+        (3*powminus2 -(str-powminus2) = powminus0-str) */
         ret[powminus0 - 1 - str] = v[TA0B] + v[TA1B];  // if h(A) != h(B) and h(A) = z
     }
 }
@@ -205,17 +198,11 @@ void F(const ArrayXd &v1, const ArrayXd &v2, ArrayXd &ret) {
     std::chrono::duration<double> elapsed_seconds = end2 - start2;
     cout << "Elapsed time F1 (s): " << elapsed_seconds.count() << endl;
 
-    /* This line does the following:
-    Takes the elementwise maximum of f01 (first half of ret) and f11, and fills the second half
-    of the ret vector with the result (multiplied by 0.5). Afterward, first half of ret vector
-    can be safely overwritten.*/
     start2 = std::chrono::system_clock::now();
-    ret(Eigen::seq(powminus2, powminus1 - 1)) =
-        0.5 * (ret(Eigen::seq(0, powminus2 - 1)).max(ret(Eigen::seq(powminus2, powminus1 - 1))));
+    elementwise_max_parallel(ret, 0);
     end2 = std::chrono::system_clock::now();
     elapsed_seconds = end2 - start2;
     cout << "Elapsed time F2 (s): " << elapsed_seconds.count() << endl;
-    // TODO: parallelize above operation (and in F_withplusR as well)
 
     //  Puts f_double into the first half of the ret vector
     start2 = std::chrono::system_clock::now();
@@ -226,14 +213,13 @@ void F(const ArrayXd &v1, const ArrayXd &v2, ArrayXd &ret) {
 }
 
 // Exactly like F, but saves memory as it can be fed v, v+R but use only one vector
-void F_withplusR(double R, ArrayXd &v2, ArrayXd &ret) {
+void F_withplusR(const double R, ArrayXd &v2, ArrayXd &ret) {
     // Places f01 and f11 back to back into the vector pointed to by ret
     // v2+R is normally fed to F_01. However, we can actually avoid doing so.
     F_01(v2, ret);
 
     // v2+R is NOT fed to F_01. Instead, since ret[] is always set to v[] + v[], we can just add 2*R at the end.
-    ret(Eigen::seq(powminus2, powminus1 - 1)) =
-        0.5 * (ret(Eigen::seq(0, powminus2 - 1)).max(ret(Eigen::seq(powminus2, powminus1 - 1)))) + 2 * R;
+    elementwise_max_parallel(ret, R);
     /* While it would be nice to do this function first and then add 2*R to the vector, it would prevent us from reusing
     memory since F_12 requires half a vector, but F_01 temporarily requires a full vector (as currently implemented).
     v2 without R added*/
@@ -259,7 +245,7 @@ void FeasibleTriplet(int n) {
 
         start2 = std::chrono::system_clock::now();
         // TODO: if this uses a vector of mem temporarily, store v2-v1 into v1?
-        double R = findR_parallel(v1, v2);
+        const double R = findR_parallel(v1, v2);
         end = std::chrono::system_clock::now();
         elapsed_seconds = end - start2;
         cout << "Elapsed time (s) mc1: " << elapsed_seconds.count() << endl;
@@ -281,7 +267,7 @@ void FeasibleTriplet(int n) {
         // We again reuse v1 to store W, and with single vector v0 is replaced by v1.
         start2 = std::chrono::system_clock::now();
         v1 = v2 + 2 * R - v1;
-        double E = std::max(0.0, v1.maxCoeff());
+        const double E = std::max(0.0, v1.maxCoeff());
         end = std::chrono::system_clock::now();
         elapsed_seconds = end - start2;
         cout << "Elapsed time mc2 (s): " << elapsed_seconds.count() << endl;
