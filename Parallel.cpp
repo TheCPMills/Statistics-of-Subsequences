@@ -1,5 +1,5 @@
 #define EIGEN_NO_DEBUG 1
-// TODO: PUT ABOVE BACK
+//  TODO: PUT ABOVE BACK
 
 #include <Eigen/Dense>
 #include <chrono>
@@ -8,7 +8,6 @@
 #include <future>
 #include <iostream>
 #include <thread>
-using Eigen::Array;
 using Eigen::ArrayXd;
 using std::cout;
 using std::endl;
@@ -43,7 +42,7 @@ void printArray(const ArrayXd &arr) {
     So instead we break that calculation up across threads.*/
 double findR_parallel(const ArrayXd &v1, const ArrayXd &v2) {
     std::future<double> maxVals[NUM_THREADS];
-    uint64_t incr = powminus1 / NUM_THREADS;
+    const uint64_t incr = powminus1 / NUM_THREADS;
 
     // Function to calculate the maximum coefficient in a particular (start...end) slice
     auto findMax = [](uint64_t start, uint64_t end, const ArrayXd &v1, const ArrayXd &v2) {
@@ -65,6 +64,39 @@ double findR_parallel(const ArrayXd &v1, const ArrayXd &v2) {
     }
     return R;
 }
+
+// void elementwise_max_parallel(ArrayXd &ret) {
+//     // start of second half of array is powminus2
+//     const uint64_t middle = powminus2;
+
+//     // ret(Eigen::seq(powminus2, powminus1 - 1)) =
+//     //     0.5 * (ret(Eigen::seq(0, powminus2 - 1)).max(ret(Eigen::seq(powminus1 - 1, powminus2, -1))).eval()) + 2 *
+//     R;
+
+//     // TODO: check if doing the first part of the assigment backwards i.e. changing (powminus2, powminus-1) to be
+//     // backwards avoids needs for .eval() [that may mess up order]
+//     auto elementwise_max = [](uint64_t start, uint64_t end, ArrayXd &ret) {
+//         // TODO: check if can remove .eval()
+//         ret(Eigen::seq(middle + start, middle + end - 1)) =
+//             0.5 *
+//             ret(Eigen::seq(start, end - 1)).max(ret(Eigen::seq(powminus1 - 1 - start, powminus1 - end, -1))).eval();
+//     };
+
+//     std::thread threads[NUM_THREADS];
+//     const uint64_t incr = (powminus2) / (NUM_THREADS);
+//     for (int i = 0; i < NUM_THREADS; i++) {
+//         threads[i] = std::thread(elementwise_max, incr * i, incr * (i + 1), std::ref(ret));
+//     }
+//     for (int i = 0; i < NUM_THREADS; i++) {
+//         threads[i].join();
+//     }
+//     for (int i = 0; i < NUM_THREADS; i++) {
+//         threads[i] = std::thread(F_01_loop2, end + incr * i, end + incr * (i + 1), std::cref(v), std::ref(ret));
+//     }
+//     for (int i = 0; i < NUM_THREADS; i++) {
+//         threads[i].join();
+//     }
+// }
 
 void F_01_loop1(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret) {
     for (uint64_t str = start; str < end; str++) {
@@ -97,7 +129,12 @@ void F_01_loop2(const uint64_t start, const uint64_t end, const ArrayXd &v, Arra
         TA0B = std::min(TA0B, (powminus0 - 1) - TA0B);
         TA1B = std::min(TA1B, (powminus0 - 1) - TA1B);
 
-        ret[str - powminus2] = v[TA0B] + v[TA1B];  // if h(A) != h(B) and h(A) = z
+        // The below line is normally ret[str - powminus2] = v[TA0B] + v[TA1B];
+        // However, the values from this part get reversed afterwards. So, instead,
+        // we do the reversing here locally to avoid the need for that (it allows
+        // us to avoid needing to copy things when multithreading later).
+        // (3*powminus2 -(str-powminus2) = powminus0-str)
+        ret[powminus0 - 1 - str] = v[TA0B] + v[TA1B];  // if h(A) != h(B) and h(A) = z
     }
 }
 
@@ -169,16 +206,17 @@ void F(const ArrayXd &v1, const ArrayXd &v2, ArrayXd &ret) {
     cout << "Elapsed time F1 (s): " << elapsed_seconds.count() << endl;
 
     /* This line does the following:
-    Takes the elementwise maximum of f01 (first half of ret) and f11 (second half of ret, iterated in
-    reverse order), and fills the second half of the ret vector with the result (multiplied by 0.5). Afterward, first
-    half of ret vector can be safely overwritten. The .eval() is necessary to prevent aliasing issues. */
+    Takes the elementwise maximum of f01 (first half of ret) and f11, and fills the second half
+    of the ret vector with the result (multiplied by 0.5). Afterward, first half of ret vector
+    can be safely overwritten.*/
     start2 = std::chrono::system_clock::now();
     ret(Eigen::seq(powminus2, powminus1 - 1)) =
-        0.5 * (ret(Eigen::seq(0, powminus2 - 1)).max(ret(Eigen::seq(powminus1 - 1, powminus2, -1))).eval());
+        0.5 * (ret(Eigen::seq(0, powminus2 - 1)).max(ret(Eigen::seq(powminus2, powminus1 - 1))));
     end2 = std::chrono::system_clock::now();
     elapsed_seconds = end2 - start2;
     cout << "Elapsed time F2 (s): " << elapsed_seconds.count() << endl;
     // TODO: parallelize above operation (and in F_withplusR as well)
+
     //  Puts f_double into the first half of the ret vector
     start2 = std::chrono::system_clock::now();
     F_12(v2, ret);
@@ -195,7 +233,7 @@ void F_withplusR(double R, ArrayXd &v2, ArrayXd &ret) {
 
     // v2+R is NOT fed to F_01. Instead, since ret[] is always set to v[] + v[], we can just add 2*R at the end.
     ret(Eigen::seq(powminus2, powminus1 - 1)) =
-        0.5 * (ret(Eigen::seq(0, powminus2 - 1)).max(ret(Eigen::seq(powminus1 - 1, powminus2, -1))).eval()) + 2 * R;
+        0.5 * (ret(Eigen::seq(0, powminus2 - 1)).max(ret(Eigen::seq(powminus2, powminus1 - 1)))) + 2 * R;
     /* While it would be nice to do this function first and then add 2*R to the vector, it would prevent us from reusing
     memory since F_12 requires half a vector, but F_01 temporarily requires a full vector (as currently implemented).
     v2 without R added*/
