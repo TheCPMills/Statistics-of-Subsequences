@@ -45,13 +45,13 @@ double findR_parallel(const ArrayXd &v1, const ArrayXd &v2) {
     const uint64_t incr = powminus1 / NUM_THREADS;
 
     // Function to calculate the maximum coefficient in a particular (start...end) slice
-    auto findMax = [](uint64_t start, uint64_t end, const ArrayXd &v1, const ArrayXd &v2) {
+    auto findMax = [&v1, &v2](uint64_t start, uint64_t end) {
         return (v2(Eigen::seq(start, end - 1)) - v1(Eigen::seq(start, end - 1))).maxCoeff();
     };
 
     // Set threads to calculate the max coef in their own smaller slices
     for (int i = 0; i < NUM_THREADS; i++) {
-        maxVals[i] = std::async(std::launch::async, findMax, incr * i, incr * (i + 1), std::cref(v1), std::cref(v2));
+        maxVals[i] = std::async(std::launch::async, findMax, incr * i, incr * (i + 1));
     }
 
     // Now calculate the global max
@@ -76,15 +76,17 @@ void elementwise_max_parallel(ArrayXd &ret, const double R) {
 
     // TODO: benchmark if adding R always (but 0 half the time) is slower than only adding R
     // in a separate function. Probably no difference, but may as well check.
-    auto elementwise_max = [R](uint64_t start, uint64_t end, ArrayXd &ret) {
+    // Function to perform the elementwise maximum as described above on a (end-start)-length chunk
+    auto elementwise_max = [&ret, R](uint64_t start, uint64_t end) {
         ret(Eigen::seq(middle + start, middle + end - 1)) =
             0.5 * ret(Eigen::seq(start, end - 1)).max(ret(Eigen::seq(middle + start, middle + end - 1))) + 2 * R;
     };
 
+    // Set threads to calculate the elementwise max as described above in their own chunk
     std::thread threads[NUM_THREADS];
     const uint64_t incr = (powminus2) / (NUM_THREADS);
     for (int i = 0; i < NUM_THREADS; i++) {
-        threads[i] = std::thread(elementwise_max, incr * i, incr * (i + 1), std::ref(ret));
+        threads[i] = std::thread(elementwise_max, incr * i, incr * (i + 1));
     }
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i].join();
@@ -158,7 +160,7 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
     const uint64_t start = 0;
     const uint64_t end = powminus2;
     const uint64_t incr = (end - start) / (NUM_THREADS);  // Careful to make sure NUM_THREADS is a divisor!
-    auto loop = [](uint64_t start, uint64_t end, const ArrayXd &v, ArrayXd &ret) {
+    auto loop = [&v, &ret](uint64_t start, uint64_t end) {
         for (uint64_t str = start; str < end; str++) {
             const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & ((uint64_t(1) << (2 * length - 1)) - 1);
             const uint64_t TB = (str & 0x5555555555555555) & ((uint64_t(1) << (2 * length - 2)) - 1);
@@ -180,7 +182,7 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
         }
     };
     for (int i = 0; i < NUM_THREADS; i++) {
-        threads[i] = std::thread(loop, start + incr * i, start + incr * (i + 1), std::cref(v), std::ref(ret));
+        threads[i] = std::thread(loop, start + incr * i, start + incr * (i + 1));
     }
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i].join();
