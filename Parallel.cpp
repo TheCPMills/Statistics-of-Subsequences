@@ -66,7 +66,7 @@ double findR_parallel(const ArrayXd &v1, const ArrayXd &v2) {
 }
 
 /*  Takes the elementwise maximum of f01 (first half of ret) and f11 (second half of ret), and
-    fills the second halfof the ret vector with the result (multiplied by 0.5). Afterward, first
+    fills the second half of the ret vector with the result (multiplied by 0.5). Afterward, first
     half of ret vector can be safely overwritten. Does so in a parallelized fashion, since this
     can be quite slow.
     Also adds 2*R. Can set R to 0 to not add anything (as in F).*/
@@ -75,7 +75,7 @@ void elementwise_max_parallel(ArrayXd &ret, const double R) {
     const uint64_t middle = powminus2;
 
     // TODO: benchmark if adding R always (but 0 half the time) is slower than only adding R
-    // in a separate function.
+    // in a separate function. Probably no difference, but may as well check.
     auto elementwise_max = [R](uint64_t start, uint64_t end, ArrayXd &ret) {
         ret(Eigen::seq(middle + start, middle + end - 1)) =
             0.5 * ret(Eigen::seq(start, end - 1)).max(ret(Eigen::seq(middle + start, middle + end - 1))) + 2 * R;
@@ -249,7 +249,6 @@ void FeasibleTriplet(int n) {
         end = std::chrono::system_clock::now();
         elapsed_seconds = end - start2;
         cout << "Elapsed time (s) mc1: " << elapsed_seconds.count() << endl;
-        // TODO: parallelize above operation
         //  Beyond this point, v1's values are no longer needed, so we reuse
         //  its memory for other computations.
 
