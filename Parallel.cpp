@@ -93,6 +93,42 @@ void elementwise_max_parallel(ArrayXd &ret, const double R) {
     }
 }
 
+/* This function does the following operations in a parallel manner:
+v1 = v2 + 2 * R - v1;
+const double E = std::max(0.0, v1.maxCoeff());*/
+double subtract_and_find_max_parallel(ArrayXd &v1, const ArrayXd &v2, const double R) {
+    // TODO: figure out if doing a custom for loop over this that does subtraction and max coef
+    //  finding at the same time is faster
+    // TODO: also find out if should set a var equal to 2*R (prob not needed)
+    // Doing both of these at once is faster than using built in Eigen methods separately
+    auto mutate_and_max = [&v1, &v2, R](uint64_t start, uint64_t end) {
+        double max = 0;
+        for (uint64_t i = start; i < end; i++) {
+            v1[i] = v2[i] + 2 * R - v1[i];
+            max = std::max(max, v1[i]);
+        }
+        return max;
+    };
+
+    std::future<double> maxVals[NUM_THREADS];
+    const uint64_t incr = powminus1 / NUM_THREADS;
+
+    // Set threads to mutate v1 and calculate the max coef in their own smaller slices
+    for (int i = 0; i < NUM_THREADS; i++) {
+        maxVals[i] = std::async(std::launch::async, mutate_and_max, incr * i, incr * (i + 1));
+    }
+
+    // Now calculate the global max (0 included)
+    double E = 0;
+    for (int i = 0; i < NUM_THREADS; i++) {
+        double coef = maxVals[i].get();  // .get() waits until the thread completes
+        if (coef > R) {
+            E = coef;
+        }
+    }
+    return E;
+}
+
 void F_01_loop1(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret) {
     for (uint64_t str = start; str < end; str++) {
         // Take every other bit (starting at first position)
@@ -134,6 +170,8 @@ void F_01_loop2(const uint64_t start, const uint64_t end, const ArrayXd &v, Arra
 }
 
 void F_01(const ArrayXd &v, ArrayXd &ret) {
+    // TODO: FIGURE OUT IF TAKING ELEMENTWISE MAX CAN BE COMBINED INTO THIS
+    // BY DOING THOSE STEPS LOCALLY
     const uint64_t start = powminus2;
     const uint64_t end = powminus1;
     std::thread threads[NUM_THREADS];
@@ -267,12 +305,10 @@ void FeasibleTriplet(int n) {
         // Idea: normally below line is ArrayXd W = v2 + 2 * R - v0;
         // We again reuse v1 to store W, and with single vector v0 is replaced by v1.
         start2 = std::chrono::system_clock::now();
-        v1 = v2 + 2 * R - v1;
-        const double E = std::max(0.0, v1.maxCoeff());
+        const double E = subtract_and_find_max_parallel(v1, v2, R);
         end = std::chrono::system_clock::now();
         elapsed_seconds = end - start2;
         cout << "Elapsed time mc2 (s): " << elapsed_seconds.count() << endl;
-        // TODO: parallelize above operations
 
         // // FIXME: FIGURE OUT WHAT NEW IF STATEMENT NEEDS TO BE
         // if (R - E >= r - e) {
@@ -317,6 +353,6 @@ int main() {
     auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     cout << "Elapsed time (s): " << elapsed_seconds.count() << endl;
-
+    // TODO: check if eigen init parallel is something to do
     return 0;
 }
