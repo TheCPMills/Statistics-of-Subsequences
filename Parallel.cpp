@@ -14,7 +14,7 @@ using std::endl;
 
 #define length 6
 #define NUM_THREADS 4
-// Careful: ensure that NUM_THREADS divides 2^(2*length-2) (basically always will for l > 3 if power of 2)
+// Careful: ensure that NUM_THREADS divides 2^(2*length-1) (basically always will for l > 3 if power of 2)
 
 const bool PRINT_EVERY_ITER = true;
 
@@ -39,11 +39,14 @@ void printArray(const ArrayXd &arr) {
 
 /* Normally, we find R with R = (v2 - v1).maxCoeff();
     However, this is slower than the multithreaded F functions if not parallelized!
-    So instead we break that calculation up across threads.*/
-double findR_parallel(const ArrayXd &v1, const ArrayXd &v2) {
+    So instead we break that calculation up across threads.
+    Additionally, E = std::max(0.0, (v2 + 2 * R - v1).maxCoeff()). We can use
+    this function for that as well, and just add 2*R at the end. */
+double subtract_and_find_max_parallel(const ArrayXd &v1, const ArrayXd &v2) {
     std::future<double> maxVals[NUM_THREADS];
     const uint64_t incr = powminus1 / NUM_THREADS;
 
+    // TODO: see if writing own function to do this insttead of Eigen is faster
     // Function to calculate the maximum coefficient in a particular (start...end) slice
     auto findMax = [&v1, &v2](uint64_t start, uint64_t end) {
         return (v2(Eigen::seq(start, end - 1)) - v1(Eigen::seq(start, end - 1))).maxCoeff();
@@ -94,40 +97,7 @@ void elementwise_max_parallel(ArrayXd &ret, const double R) {
 }
 
 /* This function does the following operations in a parallel manner:
-v1 = v2 + 2 * R - v1;
-const double E = std::max(0.0, v1.maxCoeff());*/
-double subtract_and_find_max_parallel(ArrayXd &v1, const ArrayXd &v2, const double R) {
-    // TODO: figure out if doing a custom for loop over this that does subtraction and max coef
-    //  finding at the same time is faster
-    // TODO: also find out if should set a var equal to 2*R (prob not needed)
-    // Doing both of these at once is faster than using built in Eigen methods separately
-    auto mutate_and_max = [&v1, &v2, R](uint64_t start, uint64_t end) {
-        double max = 0;
-        for (uint64_t i = start; i < end; i++) {
-            v1[i] = v2[i] + 2 * R - v1[i];
-            max = std::max(max, v1[i]);
-        }
-        return max;
-    };
-
-    std::future<double> maxVals[NUM_THREADS];
-    const uint64_t incr = powminus1 / NUM_THREADS;
-
-    // Set threads to mutate v1 and calculate the max coef in their own smaller slices
-    for (int i = 0; i < NUM_THREADS; i++) {
-        maxVals[i] = std::async(std::launch::async, mutate_and_max, incr * i, incr * (i + 1));
-    }
-
-    // Now calculate the global max (0 included)
-    double E = 0;
-    for (int i = 0; i < NUM_THREADS; i++) {
-        double coef = maxVals[i].get();  // .get() waits until the thread completes
-        if (coef > R) {
-            E = coef;
-        }
-    }
-    return E;
-}
+const double E = std::max(0.0, (v2 + 2 * R - v1).maxCoeff());*/
 
 void F_01_loop1(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret) {
     for (uint64_t str = start; str < end; str++) {
@@ -148,14 +118,19 @@ void F_01_loop1(const uint64_t start, const uint64_t end, const ArrayXd &v, Arra
 
 void F_01_loop2(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret) {
     for (uint64_t str = start; str < end; str++) {
+        // TODO: see if this can be simplified at all
+        //  (inc. shifting right instead of left to maybe not need one of the lines)
+        // I believe an operation CAN be removed
+
         // Take every other bit (starting at first position)
         // The second & gets rid of the first bit
-        const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & ((uint64_t(1) << (2 * length - 1)) - 1);
+        const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);
         // Take every other bit (starting at second position)
         const uint64_t B = str & 0x5555555555555555;
         uint64_t TA0B = (TA << 2) | B;
         uint64_t TA1B = TA0B | 2;
 
+        // TODO: may be clever way of figuring out these mins ahead of time
         // I wonder if assigning to new variables is faster?
         TA0B = std::min(TA0B, (powminus0 - 1) - TA0B);
         TA1B = std::min(TA1B, (powminus0 - 1) - TA1B);
@@ -193,15 +168,10 @@ void F_01(const ArrayXd &v, ArrayXd &ret) {
 }
 
 void F_12(const ArrayXd &v, ArrayXd &ret) {
-    // ret = ArrayXd::Zero(powminus2);
-    std::thread threads[NUM_THREADS];
-    const uint64_t start = 0;
-    const uint64_t end = powminus2;
-    const uint64_t incr = (end - start) / (NUM_THREADS);  // Careful to make sure NUM_THREADS is a divisor!
     auto loop = [&v, &ret](uint64_t start, uint64_t end) {
         for (uint64_t str = start; str < end; str++) {
-            const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & ((uint64_t(1) << (2 * length - 1)) - 1);
-            const uint64_t TB = (str & 0x5555555555555555) & ((uint64_t(1) << (2 * length - 2)) - 1);
+            const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);
+            const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
             uint64_t TA0TB0 = (TA << 2) | (TB << 2);
             uint64_t TA0TB1 = TA0TB0 | 0b1;
             uint64_t TA1TB0 = TA0TB0 | 0b10;
@@ -210,6 +180,8 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
             // so that something something cache hits/optimization.
             // Probably not though.
 
+            // TODO: there may be a clever way of figuring out these mins AHEAD of time
+            // like, it's really just asking if it's > powminus1
             // I wonder if assigning to new variables is faster?
             TA0TB0 = std::min(TA0TB0, (powminus0 - 1) - TA0TB0);
             TA0TB1 = std::min(TA0TB1, (powminus0 - 1) - TA0TB1);
@@ -219,6 +191,10 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
             // TODO: figure out if doing 1+.25* is faster here (locally) or after at end
         }
     };
+    std::thread threads[NUM_THREADS];
+    const uint64_t start = 0;
+    const uint64_t end = powminus2;
+    const uint64_t incr = (end - start) / (NUM_THREADS);  // Careful to make sure NUM_THREADS is a divisor!
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i] = std::thread(loop, start + incr * i, start + incr * (i + 1));
     }
@@ -272,10 +248,11 @@ void FeasibleTriplet(int n) {
     ArrayXd v1 = ArrayXd::Zero(powminus1);
 
     // ArrayXd u = ArrayXd::Zero(powminus1);  // u never used
+    ArrayXd v2(powminus1);  // we pass a pointer to this, and have it get filled in
+
     double r = 0;
     double e = 0;
     for (int i = 2; i < n + 1; i++) {
-        ArrayXd v2(powminus1);  // we pass a pointer to this, and have it get filled in
         // Writes new vector (v2) into v2
         auto start2 = std::chrono::system_clock::now();
         F(v1, v1, v2);
@@ -285,7 +262,7 @@ void FeasibleTriplet(int n) {
 
         start2 = std::chrono::system_clock::now();
         // TODO: if this uses a vector of mem temporarily, store v2-v1 into v1?
-        const double R = findR_parallel(v1, v2);
+        const double R = subtract_and_find_max_parallel(v1, v2);
         end = std::chrono::system_clock::now();
         elapsed_seconds = end - start2;
         cout << "Elapsed time (s) mc1: " << elapsed_seconds.count() << endl;
@@ -301,11 +278,13 @@ void FeasibleTriplet(int n) {
         end = std::chrono::system_clock::now();
         elapsed_seconds = end - start2;
         cout << "Elapsed time FpR (s): " << elapsed_seconds.count() << endl;
+        // TODO: INVESTIGATE WHY ABOVE IS SO MUCH FASTER THAN F??
+        // except now it isnt being faster???
 
         // Idea: normally below line is ArrayXd W = v2 + 2 * R - v0;
         // We again reuse v1 to store W, and with single vector v0 is replaced by v1.
         start2 = std::chrono::system_clock::now();
-        const double E = subtract_and_find_max_parallel(v1, v2, R);
+        const double E = std::max(subtract_and_find_max_parallel(v1, v2) + 2 * R, 0.0);
         end = std::chrono::system_clock::now();
         elapsed_seconds = end - start2;
         cout << "Elapsed time mc2 (s): " << elapsed_seconds.count() << endl;
@@ -344,6 +323,11 @@ void FeasibleTriplet(int n) {
     // return u, r, e
     // cout << "Result: " << 2.0 * (r - e) << endl;
     cout << "Single Vec Result: " << 2.0 * r / (1 + r) << endl;
+    cout << "(Alt more acc): " << (2.0 * r / (1 + r)) + 2.0 * (r - e) / (1 + (r - e)) << endl;
+    // cout << "v1" << endl;
+    // printArray(v1);
+    // cout << "v2" << endl;
+    // printArray(v2);
 }
 
 int main() {
