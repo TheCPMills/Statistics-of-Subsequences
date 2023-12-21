@@ -170,9 +170,10 @@ void F_01(const ArrayXd &v, ArrayXd &ret) {
 void F_12(const ArrayXd &v, ArrayXd &ret) {
     auto loop = [&v, &ret](uint64_t start, uint64_t end) {
         for (uint64_t str = start; str < end; str++) {
-            const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);
-            const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
-            uint64_t TA0TB0 = (TA << 2) | (TB << 2);
+            // const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);
+            // const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
+            // uint64_t TA0TB0 = (TA << 2) | (TB << 2);
+            uint64_t TA0TB0 = (str & (powminus2 - 1)) << 2;  // equivalent to above 3 lines!
             uint64_t TA0TB1 = TA0TB0 | 0b1;
             uint64_t TA1TB0 = TA0TB0 | 0b10;
             uint64_t TA1TB1 = TA0TB0 | 0b11;
