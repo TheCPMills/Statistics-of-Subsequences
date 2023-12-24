@@ -1,7 +1,8 @@
-#define EIGEN_NO_DEBUG 1
-//  TODO: PUT ABOVE BACK
+// #define EIGEN_NO_DEBUG 1
+//   TODO: PUT ABOVE BACK
 
 #include <Eigen/Dense>
+#include <bitset>
 #include <chrono>
 #include <cmath>
 #include <ctime>
@@ -12,8 +13,8 @@ using Eigen::ArrayXd;
 using std::cout;
 using std::endl;
 
-#define length 6
-#define NUM_THREADS 4
+#define length 3
+#define NUM_THREADS 1
 // Careful: ensure that NUM_THREADS divides 2^(2*length-1) (basically always will for l > 3 if power of 2)
 
 const bool PRINT_EVERY_ITER = true;
@@ -25,7 +26,8 @@ const uint64_t powminus1 = uint64_t(1) << ((2 * length) - 1);
 // equal to pow(2, 2 * length - 2)
 const uint64_t powminus2 = uint64_t(1) << ((2 * length) - 2);
 
-void printArray(const ArrayXd &arr) {
+template <typename Derived>
+void printArray(const Eigen::ArrayBase<Derived> &arr) {
     for (int i = 0; i < arr.size(); i++) {
         cout << arr[i] << " ";
     }
@@ -36,6 +38,9 @@ void printArray(const ArrayXd &arr) {
 //     double prev = 0.0;
 //     if (prev == 0.0 || tol-prev > )
 // }
+
+// TODO: consider reversing order of strings so that no &'ing needs to happen, you just bitshift right
+//  instead of left? (may not work for iterating through strings. need to figure out.)
 
 /* Normally, we find R with R = (v2 - v1).maxCoeff();
     However, this is slower than the multithreaded F functions if not parallelized!
@@ -68,6 +73,275 @@ double subtract_and_find_max_parallel(const ArrayXd &v1, const ArrayXd &v2) {
     return R;
 }
 
+void F_combined_loop(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret) {
+    for (uint64_t str = start; str < end; str++) {
+        // save val for loop 2
+        const uint64_t str2 =
+            str + powminus2;  // this will ALWAYS have the effect of setting biggest 1 to 0, and putting 1 to left
+        const uint64_t str3 = powminus0 - 1 - str2;
+        // loop 1
+        // Take every other bit (starting at first position)
+        const uint64_t A = str & 0xAAAAAAAAAAAAAAAA;
+        // Take take every other bit (starting at second position)
+        // The second & gets rid of the first bit
+        const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
+        uint64_t ATB0 = A | (TB << 2);
+        uint64_t ATB1 = ATB0 | 1;  // 0b1 <- the smallest bit in B is set to 1
+        std::bitset<2 * length> atb0_before(ATB0);
+        std::bitset<2 * length> atb1_before(ATB1);
+
+        // I wonder if assigning to new variables is faster?
+        // TODO: THESE ARE UNNECESSARY!
+        ATB0 = std::min(ATB0, (powminus0 - 1) - ATB0);
+        ATB1 = std::min(ATB1, (powminus0 - 1) - ATB1);
+        // ret[str - powminus2] = v[ATB0] + v[ATB1];  // if h(A) != h(B) and h(A) = z
+
+        // loop 2
+        const uint64_t TA = (str2 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);  //
+        // Take every other bit (starting at second position)
+        const uint64_t B = str2 & 0x5555555555555555;
+        uint64_t TA0B = (TA << 2) | B;
+        uint64_t TA1B = TA0B | 2;
+        std::bitset<2 * length> ta0b_before(TA0B);
+        std::bitset<2 * length> ta1b_before(TA1B);
+
+        // TODO: may be clever way of figuring out these mins ahead of time
+        // I wonder if assigning to new variables is faster?
+        TA0B = std::min(TA0B, (powminus0 - 1) - TA0B);
+        TA1B = std::min(TA1B, (powminus0 - 1) - TA1B);
+
+        /* The below line is normally ret[str - powminus2] = v[TA0B] + v[TA1B];
+        However, the values from this part get reversed afterwards. So, instead,
+        we do the reversing here locally to avoid the need for that (it allows
+        us to avoid needing to copy things when multithreading later in elementwise_max).
+        (3*powminus2 -(str-powminus2) = powminus0-str) */
+        // ret[powminus0 - 1 - str2] = v[TA0B] + v[TA1B];  // if h(A) != h(B) and h(A) = z
+
+        // loop 3 (NEW, str3 is complement of str2 I THINK and is what gets cmprd to str)
+        const uint64_t TA3 = (str3 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);  //
+        // Take every other bit (starting at second position)
+        const uint64_t B3 = str3 & 0x5555555555555555;
+        uint64_t TA0B3 = (TA3 << 2) | B3;
+        uint64_t TA1B3 = TA0B3 | 2;
+        std::bitset<2 * length> ta0b_before3(TA0B3);
+        std::bitset<2 * length> ta1b_before3(TA1B3);
+
+        // TODO: may be clever way of figuring out these mins ahead of time
+        // I wonder if assigning to new variables is faster?
+        TA0B3 = std::min(TA0B3, (powminus0 - 1) - TA0B3);
+        TA1B3 = std::min(TA1B3, (powminus0 - 1) - TA1B3);
+
+        std::bitset<2 * length> s(str);
+        std::bitset<2 * length> s2(str2);
+        std::bitset<2 * length> s3(str3);
+        std::bitset<2 * length> a(A);
+        std::bitset<2 * length> b2(B);
+        std::bitset<2 * length> b3(B3);
+        std::bitset<2 * length> tb(TB);
+        std::bitset<2 * length> ta2(TA);
+        std::bitset<2 * length> ta3(TA3);
+        // A = TA2
+        // B2 = TB
+
+        std::bitset<2 * length> atb0_after(ATB0);
+        std::bitset<2 * length> atb1_afer(ATB1);
+        std::bitset<2 * length> ta0b_after(TA0B);
+        std::bitset<2 * length> ta1b_after(TA1B);
+
+        std::bitset<2 * length> ta0b_after3(TA0B3);
+        std::bitset<2 * length> ta1b_after3(TA1B3);
+
+        // TA0B3 = TA1B (both after)
+        // TA1B3 = TA0B (both after)
+        //  you get same relationship for the before, except that they are complemented (e.g. TA1B3 = ~TA0B)
+        cout << s << " " << s2 << " (" << s3 << "),  " << a << " " << b2 << " (" << b3 << "),  " << tb << " " << ta2
+             << " (" << ta3 << "),  " << atb0_after << " " << atb1_afer << " " << ta0b_after << " " << ta1b_after
+             << " (" << ta0b_after3 << " " << ta1b_after3 << "),  " << atb0_before << " " << atb1_before << " "
+             << ta0b_before << " " << ta1b_before << " (" << ta0b_before3 << " " << ta1b_before3 << "),  " << endl;
+
+        // should i be looking at this, or the inverse?
+    }
+}
+
+void WIPLOOP(const ArrayXd &v, ArrayXd &ret, const double R) {
+    const uint64_t start = powminus2;
+    const uint64_t end = powminus1;
+    for (uint64_t str = start; str < end; str++) {
+        // save val for loop 2
+        const uint64_t str2 =
+            str + powminus2;  // this will ALWAYS have the effect of setting biggest 1 to 0, and putting 1 to left
+        const uint64_t str3 = powminus0 + powminus2 - 1 - str2;  // NOTE: WORKS WITH BOTH - OR + powminus2
+        // loop 1
+        // Take every other bit (starting at first position)
+        const uint64_t A = str & 0xAAAAAAAAAAAAAAAA;
+        // Take take every other bit (starting at second position)
+        // The second & gets rid of the first bit
+        const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
+        uint64_t ATB0 = A | (TB << 2);
+        uint64_t ATB1 = ATB0 | 1;  // 0b1 <- the smallest bit in B is set to 1
+
+        // ret[str - powminus2] = v[ATB0] + v[ATB1];  // if h(A) != h(B) and h(A) = z
+        // will have to change this to go into second half of array
+
+        // loop 2
+        const uint64_t TA = A;
+        // const uint64_t TA = (str2 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);  //equivalent!
+
+        // Take every other bit (starting at second position)
+        const uint64_t B = TB;
+        // const uint64_t B = str2 & 0x5555555555555555; //equivalent!
+        uint64_t TA0B = (TA << 2) | B;
+        uint64_t TA1B = TA0B | 2;
+
+        // TODO: may be clever way of figuring out these mins ahead of time
+        // I wonder if assigning to new variables is faster?
+        TA0B = std::min(TA0B, (powminus0 - 1) - TA0B);
+        TA1B = std::min(TA1B, (powminus0 - 1) - TA1B);
+
+        /* The below line is normally ret[str - powminus2] = v[TA0B] + v[TA1B];
+        However, the values from this part get reversed afterwards. So, instead,
+        we do the reversing here locally to avoid the need for that (it allows
+        us to avoid needing to copy things when multithreading later in elementwise_max).
+        (3*powminus2 -(str-powminus2) = powminus0-str) */
+        // ret[powminus0 - 1 - str2] = v[TA0B] + v[TA1B];  // if h(A) != h(B) and h(A) = z
+
+        // loop 3 (NEW, str3 is complement of str2 I THINK and is what gets cmprd to str)
+        const uint64_t TA3 = (str3 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);  // equivalent!
+
+        // Take every other bit (starting at second position)
+        const uint64_t B3 = str3 & 0x5555555555555555;  // equivalent!
+        uint64_t TA0B3 = (TA3 << 2) | B3;
+        uint64_t TA1B3 = TA0B3 | 2;
+
+        // TODO: may be clever way of figuring out these mins ahead of time
+        // I wonder if assigning to new variables is faster?
+        // i think these can both be checked by 1 if statement at the same time
+        // (if TA0B3 > powminus1 -1 )
+        TA0B3 = std::min(TA0B3, (powminus0 - 1) - TA0B3);
+        TA1B3 = std::min(TA1B3, (powminus0 - 1) - TA1B3);
+
+        // idea: computing the part of the array with no need for reversing, so that one value is being set
+        // also computing entry as if starting from beginning of loop2
+        //(also)
+        // wait a minute: there may be other parts of loop1 that are symmetric/similar as in loop2
+
+        // A = TA2
+        // B2 = TB
+
+        // TA0B3 = TA1B (both after)
+        // TA1B3 = TA0B (both after)
+        //  you get same relationship for the before, except that they are complemented (e.g. TA1B3 = ~TA0B)
+        // NEVERMIND. I DIDNT HAVE -POWMINUS2 IN THERE.
+        // CHECK FOR PATTERNS NOW. BUT PROBABLY ARENT ANY.
+        // NEW PLAN: STILL DO REVERSAL LOCALLY (STR3).
+        // ALSO STILL COMPUTE STR2.
+        // actually, plan is pretty much unchanged. just that str3 cant be calc'd with str2.
+        // First though, check to see if there's any computation that can be reused related to this new str3.
+        // like, str3-powminus2 or something, idk.
+
+        // TODO: figure ou if can increment by values of 2, and reuse parts of computation (can't reuse everything, but
+        // maybe first parts)
+        const double loop1val = v[ATB0] + v[ATB1];
+        const double loop2val = v[TA0B] + v[TA1B];
+        const double loop2valcomp = v[TA0B3] + v[TA1B3];
+        ret[str] = 0.5 * std::max(loop1val, loop2valcomp) + 2 * R;  //+2*R //TODO:ADD THIS
+
+        // can maybe optimize above to be two bitwise ops: ~ and &
+
+        //  first test if above works
+        //  next, test if this works:
+        //  do this current loop only half as much, with below line
+        //  ret[powminus1-1-str2]  = loop2val;
+        //  then, in a separate loop that loops through the remaining half,
+        //  compute only loop1val, and set ret[str] = 0.5* std::max(loop1val, ret[str]);
+        cout << str << " " << str2 << " " << str3 << " " << loop2valcomp << endl;
+    }
+}
+
+void WIPLOOP_new(const ArrayXd &v, ArrayXd &ret, const double R) {
+    const uint64_t start = powminus2;
+    const uint64_t end = powminus1;
+    for (uint64_t str = start; str < start + powminus2 / 2; str++) {
+        // save val for loop 2
+        const uint64_t str2 =
+            str + powminus2;  // this will ALWAYS have the effect of setting biggest 1 to 0, and putting 1 to left
+        const uint64_t str3 = powminus0 + powminus2 - 1 - str2;
+        // maybe be able to do this subtraction as 2 bitwise ops? & and ~?
+        //  loop 1
+        //  Take every other bit (starting at first position)
+        const uint64_t A = str & 0xAAAAAAAAAAAAAAAA;
+        // Take take every other bit (starting at second position)
+        // The second & gets rid of the first bit
+        const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
+        uint64_t ATB0 = A | (TB << 2);
+        uint64_t ATB1 = ATB0 | 1;  // 0b1 <- the smallest bit in B is set to 1
+
+        // loop 2
+        const uint64_t TA = A;
+        // const uint64_t TA = (str2 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);  //equivalent!
+        // Take every other bit (starting at second position)
+        const uint64_t B = TB;
+        // const uint64_t B = str2 & 0x5555555555555555; //equivalent!
+        uint64_t TA0B = (TA << 2) | B;
+        uint64_t TA1B = TA0B | 2;
+
+        // TODO: may be clever way of figuring out these mins ahead of time
+        TA0B = std::min(TA0B, (powminus0 - 1) - TA0B);
+        TA1B = std::min(TA1B, (powminus0 - 1) - TA1B);
+
+        // loop 3 (NEW, str3 is complement of str2 I THINK and is what gets cmprd to str)
+        const uint64_t TA3 = (str3 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);  // equivalent!
+
+        // Take every other bit (starting at second position)
+        const uint64_t B3 = str3 & 0x5555555555555555;  // equivalent!
+        uint64_t TA0B3 = (TA3 << 2) | B3;
+        uint64_t TA1B3 = TA0B3 | 2;
+
+        TA0B3 = std::min(TA0B3, (powminus0 - 1) - TA0B3);
+        TA1B3 = std::min(TA1B3, (powminus0 - 1) - TA1B3);
+
+        const double loop1val = v[ATB0] + v[ATB1];
+        const double loop2val = v[TA0B] + v[TA1B];
+        const double loop2valcomp = v[TA0B3] + v[TA1B3];
+        ret[str] = 0.5 * std::max(loop1val, loop2valcomp) + 2 * R;  //+2*R //TODO:ADD THIS
+
+        ret[powminus0 - 1 - str2] = loop2val;
+        cout << (powminus1 + powminus2 - 1 - str2) << endl;
+        // str2 starts at powminus2+powminus2
+        // str2 ends at powminus2+powminus3 -1 +powminus2
+        // str3 starts at powminus1-1-powminus2 = powminus2-1
+        // str3 ends at powminus1-1-powminus2-powminus3
+        // i want
+    }
+    cout << "next loop part\n";
+    for (uint64_t str = start + powminus2 / 2; str < end; str++) {
+        // loop 1
+        const uint64_t A = str & 0xAAAAAAAAAAAAAAAA;
+        const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
+        uint64_t ATB0 = A | (TB << 2);
+        uint64_t ATB1 = ATB0 | 1;  // 0b1 <- the smallest bit in B is set to 1
+
+        const double loop1val = v[ATB0] + v[ATB1];
+        cout << str << " " << ret[str] << endl;
+        ret[str] = 0.5 * std::max(ret[str], loop1val) + 2 * R;  //+2*R //TODO:ADD THIS
+    }
+}
+
+// void WIPLOOP2(const ArrayXd &v, ArrayXd &ret, const double R) {
+//     const uint64_t start = powminus2 + powminus2 / 2;
+//     const uint64_t end = powminus1;
+//     for (uint64_t str = start + powminus2 / 2; str < end; str++) {
+//         // loop 1
+//         const uint64_t A = str & 0xAAAAAAAAAAAAAAAA;
+//         const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
+//         uint64_t ATB0 = A | (TB << 2);
+//         uint64_t ATB1 = ATB0 | 1;  // 0b1 <- the smallest bit in B is set to 1
+//
+//         const double loop1val = v[ATB0] + v[ATB1];
+//         ret[str] = 0.5 * std::max(ret[str], loop1val) + 2 * R;  //+2*R //TODO:ADD THIS
+//     }
+// }
+
 /*  Takes the elementwise maximum of f01 (first half of ret) and f11 (second half of ret), and
     fills the second half of the ret vector with the result (multiplied by 0.5). Afterward, first
     half of ret vector can be safely overwritten. Does so in a parallelized fashion, since this
@@ -96,16 +370,13 @@ void elementwise_max_parallel(ArrayXd &ret, const double R) {
     }
 }
 
-/* This function does the following operations in a parallel manner:
-const double E = std::max(0.0, (v2 + 2 * R - v1).maxCoeff());*/
-
 void F_01_loop1(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret) {
     for (uint64_t str = start; str < end; str++) {
         // Take every other bit (starting at first position)
         const uint64_t A = str & 0xAAAAAAAAAAAAAAAA;
         // Take take every other bit (starting at second position)
         // The second & gets rid of the first bit
-        const uint64_t TB = (str & 0x5555555555555555) & ((uint64_t(1) << (2 * length - 2)) - 1);
+        const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
         uint64_t ATB0 = A | (TB << 2);
         uint64_t ATB1 = ATB0 | 1;  // 0b1 <- the smallest bit in B is set to 1
 
@@ -113,6 +384,7 @@ void F_01_loop1(const uint64_t start, const uint64_t end, const ArrayXd &v, Arra
         ATB0 = std::min(ATB0, (powminus0 - 1) - ATB0);
         ATB1 = std::min(ATB1, (powminus0 - 1) - ATB1);
         ret[str - powminus2] = v[ATB0] + v[ATB1];  // if h(A) != h(B) and h(A) = z
+        // cout << ATB0 << " " << ATB1 << " " << v[ATB0] << " " << v[ATB1] << endl;
     }
 }
 
@@ -149,6 +421,7 @@ void F_01(const ArrayXd &v, ArrayXd &ret) {
     // BY DOING THOSE STEPS LOCALLY
     const uint64_t start = powminus2;
     const uint64_t end = powminus1;
+    // F_combined_loop(start, end, v, ret);
     std::thread threads[NUM_THREADS];
     const uint64_t incr = (end - start) / (NUM_THREADS);
     for (int i = 0; i < NUM_THREADS; i++) {
@@ -181,7 +454,7 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
             // so that something something cache hits/optimization.
             // Probably not though.
 
-            // TODO: there may be a clever way of figuring out these mins AHEAD of time
+            // TODO: there may be a clever way of figuring out these mins AHEAD of time (check if any unnecessary)
             // like, it's really just asking if it's > powminus1
             // I wonder if assigning to new variables is faster?
             TA0TB0 = std::min(TA0TB0, (powminus0 - 1) - TA0TB0);
@@ -190,6 +463,7 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
             TA1TB1 = std::min(TA1TB1, (powminus0 - 1) - TA1TB1);
             ret[str] = 1 + .25 * (v[TA0TB0] + v[TA0TB1] + v[TA1TB0] + v[TA1TB1]);
             // TODO: figure out if doing 1+.25* is faster here (locally) or after at end
+            // TODO: implement the symmetry
         }
     };
     std::thread threads[NUM_THREADS];
@@ -209,17 +483,30 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
 // (remember: any changes made in here have to be made in F_withplusR as well)
 void F(const ArrayXd &v1, const ArrayXd &v2, ArrayXd &ret) {
     // Places f01 and f11 back to back into the vector pointed to by ret
+    // printArray(v1);
+    // cout << "V1 ABOVE\n";
+    // ArrayXd retTEST = ret;
+    // printArray(retTEST);
+    ArrayXd retCOPY = ret;
+    // WIPLOOP(v1, ret, 0);
+    WIPLOOP_new(v1, ret, 0);
+    // printArray(retTEST);
+    //  printArray(v1);
+    //  cout << "V1 ABOVE AFTER WIP\n";
     auto start2 = std::chrono::system_clock::now();
-    F_01(v1, ret);
+    // F_01(v1, ret);
     auto end2 = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end2 - start2;
     cout << "Elapsed time F1 (s): " << elapsed_seconds.count() << endl;
-
+    // printArray(ret);
+    //  printArray(v1);
+    //  cout << "V1 ABOVE AFTER F_01\n";
     start2 = std::chrono::system_clock::now();
-    elementwise_max_parallel(ret, 0);
+    // elementwise_max_parallel(ret, 0);
     end2 = std::chrono::system_clock::now();
     elapsed_seconds = end2 - start2;
     cout << "Elapsed time F2 (s): " << elapsed_seconds.count() << endl;
+    // printArray(ret);
 
     //  Puts f_double into the first half of the ret vector
     start2 = std::chrono::system_clock::now();
@@ -227,16 +514,22 @@ void F(const ArrayXd &v1, const ArrayXd &v2, ArrayXd &ret) {
     end2 = std::chrono::system_clock::now();
     elapsed_seconds = end2 - start2;
     cout << "Elapsed time F3 (s): " << elapsed_seconds.count() << endl;
+    // F_12(v2, retTEST);
+    //  printArray(ret.cwiseEqual(retTEST));
+    //  printArray(ret);
+    //  printArray(retTEST);
 }
 
 // Exactly like F, but saves memory as it can be fed v, v+R but use only one vector
 void F_withplusR(const double R, ArrayXd &v2, ArrayXd &ret) {
     // Places f01 and f11 back to back into the vector pointed to by ret
     // v2+R is normally fed to F_01. However, we can actually avoid doing so.
-    F_01(v2, ret);
+    // F_01(v2, ret);
 
     // v2+R is NOT fed to F_01. Instead, since ret[] is always set to v[] + v[], we can just add 2*R at the end.
-    elementwise_max_parallel(ret, R);
+    // elementwise_max_parallel(ret, R);
+    // WIPLOOP(v2, ret, R);
+    WIPLOOP_new(v2, ret, R);
     /* While it would be nice to do this function first and then add 2*R to the vector, it would prevent us from reusing
     memory since F_12 requires half a vector, but F_01 temporarily requires a full vector (as currently implemented).
     v2 without R added*/
@@ -290,6 +583,9 @@ void FeasibleTriplet(int n) {
         elapsed_seconds = end - start2;
         cout << "Elapsed time mc2 (s): " << elapsed_seconds.count() << endl;
 
+        // TODO: +2*R keeps getting added places... wonder if it's at all necessary to do,
+        //  and if we can instead just do it at the end for R and E?
+
         // // FIXME: FIGURE OUT WHAT NEW IF STATEMENT NEEDS TO BE
         // if (R - E >= r - e) {
         //     // u = v2;  // u is never used
@@ -334,7 +630,7 @@ void FeasibleTriplet(int n) {
 int main() {
     cout << "Starting with l = " << length << "..." << endl;
     auto start = std::chrono::system_clock::now();
-    FeasibleTriplet(200);
+    FeasibleTriplet(100);
     auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     cout << "Elapsed time (s): " << elapsed_seconds.count() << endl;
