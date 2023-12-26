@@ -14,7 +14,7 @@ using std::cout;
 using std::endl;
 
 #define length 3
-#define NUM_THREADS 1
+#define NUM_THREADS 4
 // Careful: ensure that NUM_THREADS divides 2^(2*length-1) (basically always will for l > 3 if power of 2)
 
 const bool PRINT_EVERY_ITER = true;
@@ -93,10 +93,8 @@ double subtract_and_find_max_parallel(const ArrayXd &v1, const ArrayXd &v2) {
  *                           str                       str4 str2                     str3
  * [                         |-->           |           <--]-->          |           <--|
  * 0                       powm2         +powm3          powm1        +powm3         +powm2*/
-void F_01_combined(const ArrayXd &v, ArrayXd &ret, const double R) {
-    const uint64_t start = powminus2;
-    const uint64_t end = powminus1;
-    for (uint64_t str = start; str < start + powminus2 / 2; str++) {
+void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret, const double R) {
+    for (uint64_t str = start; str < end; str++) {
         // save val for loop 2
         const uint64_t str2 =
             str + powminus2;  // this will ALWAYS have the effect of setting biggest 1 to 0, and putting 1 to left
@@ -152,99 +150,19 @@ void F_01_combined(const ArrayXd &v, ArrayXd &ret, const double R) {
         ret[str4] = 0.5 * std::max(loop2val, loop1val2) + R;
 
         //  TODO: loop2val is symmetric USE THIS FACT!
+
+        //(+R because +R in each v value, but then 0.5*result)
     }
 }
 
-/*  Takes the elementwise maximum of f01 (first half of ret) and f11 (second half of ret), and
-    fills the second half of the ret vector with the result (multiplied by 0.5). Afterward, first
-    half of ret vector can be safely overwritten. Does so in a parallelized fashion, since this
-    can be quite slow.
-    Also adds 2*R. Can set R to 0 to not add anything (as in F).*/
-void elementwise_max_parallel(ArrayXd &ret, const double R) {
-    // start of second half of array is powminus2
-    const uint64_t middle = powminus2;
-
-    // TODO: benchmark if adding R always (but 0 half the time) is slower than only adding R
-    // in a separate function. Probably no difference, but may as well check.
-    // Function to perform the elementwise maximum as described above on a (end-start)-length chunk
-    auto elementwise_max = [&ret, R](uint64_t start, uint64_t end) {
-        ret(Eigen::seq(middle + start, middle + end - 1)) =
-            0.5 * ret(Eigen::seq(start, end - 1)).max(ret(Eigen::seq(middle + start, middle + end - 1))) + 2 * R;
-    };
-
-    // Set threads to calculate the elementwise max as described above in their own chunk
-    std::thread threads[NUM_THREADS];
-    const uint64_t incr = (powminus2) / (NUM_THREADS);
-    for (int i = 0; i < NUM_THREADS; i++) {
-        threads[i] = std::thread(elementwise_max, incr * i, incr * (i + 1));
-    }
-    for (int i = 0; i < NUM_THREADS; i++) {
-        threads[i].join();
-    }
-}
-
-void F_01_loop1(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret) {
-    for (uint64_t str = start; str < end; str++) {
-        // Take every other bit (starting at first position)
-        const uint64_t A = str & 0xAAAAAAAAAAAAAAAA;
-        // Take take every other bit (starting at second position)
-        // The second & gets rid of the first bit
-        const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
-        uint64_t ATB0 = A | (TB << 2);
-        uint64_t ATB1 = ATB0 | 1;  // 0b1 <- the smallest bit in B is set to 1
-
-        // I wonder if assigning to new variables is faster?
-        ATB0 = std::min(ATB0, (powminus0 - 1) - ATB0);
-        ATB1 = std::min(ATB1, (powminus0 - 1) - ATB1);
-        ret[str - powminus2] = v[ATB0] + v[ATB1];  // if h(A) != h(B) and h(A) = z
-        // cout << ATB0 << " " << ATB1 << " " << v[ATB0] << " " << v[ATB1] << endl;
-    }
-}
-
-void F_01_loop2(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret) {
-    for (uint64_t str = start; str < end; str++) {
-        // TODO: see if this can be simplified at all
-        //  (inc. shifting right instead of left to maybe not need one of the lines)
-        // I believe an operation CAN be removed
-
-        // Take every other bit (starting at first position)
-        // The second & gets rid of the first bit
-        const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);
-        // Take every other bit (starting at second position)
-        const uint64_t B = str & 0x5555555555555555;
-        uint64_t TA0B = (TA << 2) | B;
-        uint64_t TA1B = TA0B | 2;
-
-        // TODO: may be clever way of figuring out these mins ahead of time
-        // I wonder if assigning to new variables is faster?
-        TA0B = std::min(TA0B, (powminus0 - 1) - TA0B);
-        TA1B = std::min(TA1B, (powminus0 - 1) - TA1B);
-
-        /* The below line is normally ret[str - powminus2] = v[TA0B] + v[TA1B];
-        However, the values from this part get reversed afterwards. So, instead,
-        we do the reversing here locally to avoid the need for that (it allows
-        us to avoid needing to copy things when multithreading later in elementwise_max).
-        (3*powminus2 -(str-powminus2) = powminus0-str) */
-        ret[powminus0 - 1 - str] = v[TA0B] + v[TA1B];  // if h(A) != h(B) and h(A) = z
-    }
-}
-
-void F_01(const ArrayXd &v, ArrayXd &ret) {
-    // TODO: FIGURE OUT IF TAKING ELEMENTWISE MAX CAN BE COMBINED INTO THIS
-    // BY DOING THOSE STEPS LOCALLY
+void F_01(const ArrayXd &v, ArrayXd &ret, const double R) {
     const uint64_t start = powminus2;
-    const uint64_t end = powminus1;
-    // F_combined_loop(start, end, v, ret);
+    const uint64_t end = powminus2 + powminus2 / 2;
     std::thread threads[NUM_THREADS];
     const uint64_t incr = (end - start) / (NUM_THREADS);
     for (int i = 0; i < NUM_THREADS; i++) {
-        threads[i] = std::thread(F_01_loop1, start + incr * i, start + incr * (i + 1), std::cref(v), std::ref(ret));
-    }
-    for (int i = 0; i < NUM_THREADS; i++) {
-        threads[i].join();
-    }
-    for (int i = 0; i < NUM_THREADS; i++) {
-        threads[i] = std::thread(F_01_loop2, end + incr * i, end + incr * (i + 1), std::cref(v), std::ref(ret));
+        threads[i] =
+            std::thread(F_01_combined, start + incr * i, start + incr * (i + 1), std::cref(v), std::ref(ret), R);
     }
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i].join();
@@ -297,7 +215,7 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
 void F(const ArrayXd &v1, const ArrayXd &v2, ArrayXd &ret) {
     // Computes f01 and f11, does their elementwise maximum, and places it into second half of ret
     auto start2 = std::chrono::system_clock::now();
-    F_01_combined(v1, ret, 0);
+    F_01(v1, ret, 0);
     auto end2 = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end2 - start2;
     cout << "Elapsed time F1 (s): " << elapsed_seconds.count() << endl;
@@ -315,7 +233,7 @@ void F_withplusR(const double R, ArrayXd &v2, ArrayXd &ret) {
     // v2+R is normally fed to F_01. However, we can actually avoid doing so.
 
     // v2+R is NOT fed to F_01. Instead, since ret[] is always set to v[] + v[], we can just add 2*R at the end.
-    F_01_combined(v2, ret, R);
+    F_01(v2, ret, R);
     /* While it would be nice to do this function first and then add 2*R to the vector, it would prevent us from reusing
     memory since F_12 requires half a vector, but F_01 temporarily requires a full vector (as currently implemented).
     v2 without R added*/
@@ -352,7 +270,7 @@ void FeasibleTriplet(int n) {
         // NOTE: THE v1's HERE ARE REUSED MEMORY. v1's VALUES NOT USED, INSTEAD
         // v1 IS COMPLETELY OVERWRITTEN HERE.
         // Normally F(v2+R, v2, v0), but I think this ver saves an entire vector
-        // of memory at the cost of a small amount more computation.
+        // of memory.
         start2 = std::chrono::system_clock::now();
         F_withplusR(R, v2, v1);
         end = std::chrono::system_clock::now();
@@ -416,7 +334,7 @@ void FeasibleTriplet(int n) {
 int main() {
     cout << "Starting with l = " << length << "..." << endl;
     auto start = std::chrono::system_clock::now();
-    FeasibleTriplet(200);
+    FeasibleTriplet(50);
     auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     cout << "Elapsed time (s): " << elapsed_seconds.count() << endl;
