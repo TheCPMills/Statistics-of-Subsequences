@@ -13,7 +13,7 @@ using Eigen::ArrayXd;
 using std::cout;
 using std::endl;
 
-#define length 3
+#define length 9
 #define NUM_THREADS 4
 // Careful: ensure that NUM_THREADS divides 2^(2*length-1) (basically always will for l > 3 if power of 2)
 
@@ -177,29 +177,27 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
             // const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);
             // const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
             // uint64_t TA0TB0 = (TA << 2) | (TB << 2);
-            uint64_t TA0TB0 = (str & (powminus2 - 1)) << 2;  // equivalent to above 3 lines!
-            uint64_t TA0TB1 = TA0TB0 | 0b1;
-            uint64_t TA1TB0 = TA0TB0 | 0b10;
-            uint64_t TA1TB1 = TA0TB0 | 0b11;
-            // There might be an argument to split this for loop into 4,
-            // so that something something cache hits/optimization.
-            // Probably not though.
+            const uint64_t TA0TB0 = (str & (powminus2 - 1)) << 2;  // equivalent to above 3 lines!
+            const uint64_t TA0TB1 = TA0TB0 | 0b1;
+            const uint64_t TA1TB0 = TA0TB0 | 0b10;
+            const uint64_t TA1TB1 = TA0TB0 | 0b11;
 
-            // TODO: there may be a clever way of figuring out these mins AHEAD of time (check if any unnecessary)
-            // like, it's really just asking if it's > powminus1
-            // I wonder if assigning to new variables is faster?
-            TA0TB0 = std::min(TA0TB0, (powminus0 - 1) - TA0TB0);
-            TA0TB1 = std::min(TA0TB1, (powminus0 - 1) - TA0TB1);
-            TA1TB0 = std::min(TA1TB0, (powminus0 - 1) - TA1TB0);
-            TA1TB1 = std::min(TA1TB1, (powminus0 - 1) - TA1TB1);
+            // These used to be necessary, but are really just asking if str >= powminus3.
+            // But now that we're using the symmetry, this will never be the case since str
+            // only reaches powminus3-1.
+            // TA0TB0 = std::min(TA0TB0, (powminus0 - 1) - TA0TB0);
+            // TA0TB1 = std::min(TA0TB1, (powminus0 - 1) - TA0TB1);
+            // TA1TB0 = std::min(TA1TB0, (powminus0 - 1) - TA1TB0);
+            // TA1TB1 = std::min(TA1TB1, (powminus0 - 1) - TA1TB1);
+
             ret[str] = 1 + .25 * (v[TA0TB0] + v[TA0TB1] + v[TA1TB0] + v[TA1TB1]);
-            // TODO: figure out if doing 1+.25* is faster here (locally) or after at end
-            // TODO: implement the symmetry
+            ret[powminus2 - 1 - str] = ret[str];  // array is self-symmetric!
+            // TODO: see if can use this symmetry to reduce space needed
         }
     };
     std::thread threads[NUM_THREADS];
     const uint64_t start = 0;
-    const uint64_t end = powminus2;
+    const uint64_t end = powminus2 / 2;
     const uint64_t incr = (end - start) / (NUM_THREADS);  // Careful to make sure NUM_THREADS is a divisor!
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i] = std::thread(loop, start + incr * i, start + incr * (i + 1));
