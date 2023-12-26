@@ -312,7 +312,7 @@ void FeasibleTriplet(int n) {
             // cout << "At n=" << i << ": " << 2.0 * (e - r) << endl;
             // cout << "R, E: " << R << " " << E << endl;
             // cout << (2.0 * r / (1 + r)) << endl;
-            cout << "At n=" << i << ": " << (2.0 * r / (1 + r)) + 2.0 * (r - e) / (1 + (r - e)) << endl;
+            printf("At n=%i: %.9f\n", i, (2.0 * r / (1 + r)) + 2.0 * (r - e) / (1 + (r - e)));
             end = std::chrono::system_clock::now();
             elapsed_seconds = end - start;
             cout << "Elapsed time (s): " << elapsed_seconds.count() << endl;
@@ -323,8 +323,8 @@ void FeasibleTriplet(int n) {
 
     // return u, r, e
     // cout << "Result: " << 2.0 * (r - e) << endl;
-    cout << "Single Vec Result: " << 2.0 * r / (1 + r) << endl;
-    cout << "(Alt more acc): " << (2.0 * r / (1 + r)) + 2.0 * (r - e) / (1 + (r - e)) << endl;
+    printf("Single Vec Result: %.9f\n", 2.0 * r / (1 + r));
+    printf("(Alt more acc): %.9f\n", (2.0 * r / (1 + r)) + 2.0 * (r - e) / (1 + (r - e)));
     // cout << "v1" << endl;
     // printArray(v1);
     // cout << "v2" << endl;
