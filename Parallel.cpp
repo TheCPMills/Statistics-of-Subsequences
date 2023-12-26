@@ -141,7 +141,7 @@ void F_01_combined(const ArrayXd &v, ArrayXd &ret, const double R) {
         const double loop1val = v[ATB0] + v[ATB1];
         const double loop2val = v[TA0B] + v[TA1B];
         const double loop2valcomp = v[TA0B3] + v[TA1B3];
-        ret[str] = 0.5 * std::max(loop1val, loop2valcomp) + 2 * R;  //+2*R //TODO:ADD THIS
+        ret[str] = 0.5 * std::max(loop1val, loop2valcomp) + R;  //+2*R //TODO:ADD THIS
 
         // for str4
         const uint64_t A_2 = TA3;
@@ -149,7 +149,7 @@ void F_01_combined(const ArrayXd &v, ArrayXd &ret, const double R) {
         const uint64_t ATB0_2 = A_2 | (TB_2 << 2);
         const uint64_t ATB1_2 = ATB0_2 | 1;  // 0b1 <- the smallest bit in B is set to
         const double loop1val2 = v[ATB0_2] + v[ATB1_2];
-        ret[str4] = 0.5 * std::max(loop2val, loop1val2) + 2 * R;
+        ret[str4] = 0.5 * std::max(loop2val, loop1val2) + R;
 
         //  TODO: loop2val is symmetric USE THIS FACT!
     }
