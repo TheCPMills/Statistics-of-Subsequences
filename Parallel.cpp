@@ -1,4 +1,4 @@
-// #define EIGEN_NO_DEBUG 1
+#define EIGEN_NO_DEBUG 1
 //   TODO: PUT ABOVE BACK
 
 #include <Eigen/Dense>
@@ -13,8 +13,8 @@ using Eigen::ArrayXd;
 using std::cout;
 using std::endl;
 
-#define length 9
-#define NUM_THREADS 4
+#define length 3
+#define NUM_THREADS 1
 // Careful: ensure that NUM_THREADS divides 2^(2*length-1) (basically always will for l > 3 if power of 2)
 
 const bool PRINT_EVERY_ITER = true;
@@ -25,6 +25,8 @@ const uint64_t powminus0 = uint64_t(1) << (2 * length);
 const uint64_t powminus1 = uint64_t(1) << ((2 * length) - 1);
 // equal to pow(2, 2 * length - 2)
 const uint64_t powminus2 = uint64_t(1) << ((2 * length) - 2);
+// equal to pow(2, 2 * length - 3)
+const uint64_t powminus3 = uint64_t(1) << ((2 * length) - 3);
 
 template <typename Derived>
 void printArray(const Eigen::ArrayBase<Derived> &arr) {
@@ -96,13 +98,13 @@ double subtract_and_find_max_parallel(const ArrayXd &v1, const ArrayXd &v2) {
 void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret, const double R) {
     for (uint64_t str = start; str < end; str++) {
         // save val for loop 2
-        const uint64_t str2 =
-            str + powminus2;  // this will ALWAYS have the effect of setting biggest 1 to 0, and putting 1 to left
+        const uint64_t str2 = str + powminus2;
+        // above will ALWAYS have the effect of setting biggest 1 to 0, and putting 1 to left
         const uint64_t str3 = powminus0 + powminus2 - 1 - str2;
         // may be able to do this subtraction as 2 bitwise ops? & and ~?
         const uint64_t str4 = str3 - powminus2;
 
-        // Compute as in Loop 1
+        // Compute as in Loop 1 [str]
         // Take every other bit (starting at first position)
         const uint64_t A = str & 0xAAAAAAAAAAAAAAAA;
         // Take every other bit (starting at second position)
@@ -111,7 +113,7 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
         const uint64_t ATB0 = A | (TB << 2);
         const uint64_t ATB1 = ATB0 | 1;  // 0b1 <- the smallest bit in B is set to 1
 
-        // Compute as in Loop 2
+        // Compute as in Loop 2 [str2]
         const uint64_t TA = A;
         // const uint64_t TA = (str2 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);  //equivalent!
         // Take every other bit (starting at second position)
@@ -124,7 +126,7 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
         TA0B = std::min(TA0B, (powminus0 - 1) - TA0B);
         TA1B = std::min(TA1B, (powminus0 - 1) - TA1B);
 
-        // Calculate the values for str3 (done as in Loop 2)
+        // Compute as in Loop 2 [str3]
         const uint64_t TA3 = (str3 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);
 
         // Take every other bit (starting at second position)
@@ -141,7 +143,7 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
         const double loop2valcomp = v[TA0B3] + v[TA1B3];
         ret[str] = 0.5 * std::max(loop1val, loop2valcomp) + R;  //+2*R //TODO:ADD THIS
 
-        // for str4
+        // Compute as in Loop 1 [str4]
         const uint64_t A_2 = TA3;
         const uint64_t TB_2 = B3;
         const uint64_t ATB0_2 = A_2 | (TB_2 << 2);
@@ -157,7 +159,7 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
 
 void F_01(const ArrayXd &v, ArrayXd &ret, const double R) {
     const uint64_t start = powminus2;
-    const uint64_t end = powminus2 + powminus2 / 2;
+    const uint64_t end = powminus2 + powminus3;
     std::thread threads[NUM_THREADS];
     const uint64_t incr = (end - start) / (NUM_THREADS);
     for (int i = 0; i < NUM_THREADS; i++) {
@@ -184,7 +186,7 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
 
             // These used to be necessary, but are really just asking if str >= powminus3.
             // But now that we're using the symmetry, this will never be the case since str
-            // only reaches powminus3-1.
+            // only reaches powminus3 -1.
             // TA0TB0 = std::min(TA0TB0, (powminus0 - 1) - TA0TB0);
             // TA0TB1 = std::min(TA0TB1, (powminus0 - 1) - TA0TB1);
             // TA1TB0 = std::min(TA1TB0, (powminus0 - 1) - TA1TB0);
@@ -197,7 +199,7 @@ void F_12(const ArrayXd &v, ArrayXd &ret) {
     };
     std::thread threads[NUM_THREADS];
     const uint64_t start = 0;
-    const uint64_t end = powminus2 / 2;
+    const uint64_t end = powminus3;
     const uint64_t incr = (end - start) / (NUM_THREADS);  // Careful to make sure NUM_THREADS is a divisor!
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i] = std::thread(loop, start + incr * i, start + incr * (i + 1));
