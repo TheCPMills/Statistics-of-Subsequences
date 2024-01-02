@@ -42,9 +42,6 @@ void printArray(const Eigen::ArrayBase<Derived> &arr) {
 //     if (prev == 0.0 || tol-prev > )
 // }
 
-// TODO: consider reversing order of strings so that no &'ing needs to happen, you just bitshift right
-//  instead of left? (may not work for iterating through strings. need to figure out.)
-
 /* Normally, we find R with R = (v2 - v1).maxCoeff();
     However, this is slower than the multithreaded F functions if not parallelized!
     So instead we break that calculation up across threads.
@@ -95,33 +92,40 @@ double subtract_and_find_max_parallel(const ArrayXd &v1, const ArrayXd &v2) {
  *
  *                           str                       str4 str2                     str3
  * [                         |-->           |           <--]-->          |           <--|
- * 0                       powm2         +powm3          powm1        +powm3         +powm2*/
+ * 0                       powm2         +powm3          powm1        +powm3         +powm2
+ *
+ *
+ * A few other notes to understand this code:
+ * - 0xAA... is the binary string 10101010..., meaning str & 0xAA... gives us A.
+ * - Similarly, 0x55... is the binary string 01010101..., meaning str & 0x55... gives us B.
+ * - Doing & (powminus2 - 1) zeros out the first bit of A and of B since (powminus2-1) is 0s until the 2nd
+ * bit of str and 1s after. Similarly, doing & (powminus1 - 1) zeros out only the first bit of A.*/
 void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret, const double R) {
     for (uint64_t str = start; str < end; str++) {
         // save val for loop 2
         const uint64_t str2 = str + powminus2;
         // above will ALWAYS have the effect of setting biggest 1 to 0, and putting 1 to left
         const uint64_t str3 = powminus0 + powminus2 - 1 - str2;
-        // may be able to do this subtraction as 2 bitwise ops? & and ~?
         const uint64_t str4 = str3 - powminus2;
+        // may be able to do each of these +'s and -'s as 2 bitwise ops? &, |, or ~?
 
         // Compute as in Loop 1 [str]
-        // Take every other bit (starting at first position)
+        // Keep A as is, remove the first bit of B and shift B left, and then set the new
+        // last bit of B to either 0 or 1.
         const uint64_t A = str & 0xAAAAAAAAAAAAAAAA;
-        // Take every other bit (starting at second position)
-        // The second & gets rid of the first bit
         const uint64_t TB = (str & 0x5555555555555555) & (powminus2 - 1);
-        const uint64_t ATB0 = A | (TB << 2);
-        const uint64_t ATB1 = ATB0 | 1;  // 0b1 <- the smallest bit in B is set to 1
+        const uint64_t ATB0 = A | (TB << 2);  // the smallest bit in B is implicitly set to 0
+        const uint64_t ATB1 = ATB0 | 1;       // 0b01 <- the smallest bit in B is set to 1
 
         // Compute as in Loop 2 [str2]
+        // Keep B as is, remove the first bit of A and shift A left, and then set the new
+        // last bit of A to either 0 or 1.
         const uint64_t TA = A;
         // const uint64_t TA = (str2 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);  //equivalent!
-        // Take every other bit (starting at second position)
         const uint64_t B = TB;
         // const uint64_t B = str2 & 0x5555555555555555; //equivalent!
-        uint64_t TA0B = (TA << 2) | B;
-        uint64_t TA1B = TA0B | 2;
+        uint64_t TA0B = (TA << 2) | B;  // the smallest bit in A is implicitly set to 0
+        uint64_t TA1B = TA0B | 2;       // 0b10 <- the smallest bit in A is set to 1
 
         // TODO: may be clever way of figuring out these mins ahead of time
         TA0B = std::min(TA0B, (powminus0 - 1) - TA0B);
@@ -129,10 +133,8 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
 
         // Compute as in Loop 2 [str3]
         const uint64_t TA3 = (str3 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);
-
-        // Take every other bit (starting at second position)
         const uint64_t B3 = str3 & 0x5555555555555555;
-        uint64_t TA0B3 = (TA3 << 2) | B3;
+        uint64_t TA0B3 = (TA3 << 2) | B3;  // the smallest bit in A is implicitly set to 0
         // uint64_t TA1B3 = TA0B3 | 2;
 
         // these lines used to be:
@@ -153,8 +155,8 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
         // Compute as in Loop 1 [str4]
         const uint64_t A_2 = TA3;
         const uint64_t TB_2 = B3;
-        const uint64_t ATB0_2 = A_2 | (TB_2 << 2);
-        const uint64_t ATB1_2 = ATB0_2 | 1;  // 0b1 <- the smallest bit in B is set to 1
+        const uint64_t ATB0_2 = A_2 | (TB_2 << 2);  // the smallest bit in B is implicitly set to 0
+        const uint64_t ATB1_2 = ATB0_2 | 1;         // 0b1 <- the smallest bit in B is set to 1
         const double loop1val2 = v[ATB0_2] + v[ATB1_2];
         ret[str4] = 0.5 * std::max(loop2val, loop1val2) + R;
         // TODO: figure out which values in the max are larger if possible
