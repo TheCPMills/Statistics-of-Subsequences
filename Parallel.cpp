@@ -13,9 +13,10 @@ using Eigen::ArrayXd;
 using std::cout;
 using std::endl;
 
-#define length 3
+#define length 4
 #define NUM_THREADS 1
 // Careful: ensure that NUM_THREADS divides 2^(2*length-1) (basically always will for l > 3 if power of 2)
+#define CALC_EVERY_X_ITERATIONS 25
 
 const bool PRINT_EVERY_ITER = true;
 
@@ -150,10 +151,47 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
         const uint64_t ATB1_2 = ATB0_2 | 1;  // 0b1 <- the smallest bit in B is set to
         const double loop1val2 = v[ATB0_2] + v[ATB1_2];
         ret[str4] = 0.5 * std::max(loop2val, loop1val2) + R;
+        // TODO: figure out which values in the max are larger if possible
+        // if (loop2val > loop1val2) {
+        //     cout << "CASE 1\n";
+        // }
+        // if (loop2val < loop1val2) {
+        //     cout << "CASE 2\n";
+        // }
+        // if (loop2val == loop1val2) {
+        //     cout << "SAME\n";
+        // }
+        // if (loop1val > loop2valcomp) {
+        //     cout << "           CASE 1\n";
+        // }
+        // if (loop1val < loop2valcomp) {
+        //     cout << "           CASE 2\n";
+        // }
+        // if (loop1val == loop2valcomp) {
+        //     cout << "           SAME\n";
+        // }
 
         //  TODO: loop2val is symmetric USE THIS FACT!
 
         //(+R because +R in each v value, but then 0.5*result)
+        // printf("AT %i:  %f %f %f %f   %i %i  %i %i  %i %i  %i %i\n", str - start, loop1val, loop2val, loop2valcomp,
+        //        loop1val2, ATB0, ATB1, TA0B, TA1B, TA0B3, TA1B3, ATB0_2, ATB1_2);
+        /*TODO: Figure out the very odd pattern: in bottom half of loop1val's and bottom half of loop2valcomp's vals, if
+         * you iterate through the accessors for loop1val in order (i.e. 64 65 -> 66 67 -> 68 69 and so on) then their
+         * corresponding loop1val match with the loop2valcomp that far from the bottom. So for l=4, 64 65 is the 0th
+         * from the start (of second half of vals), so their corresponding loop1val is the same as the 0th from the
+         * bottom loop2valcomp (corresponding to 127 125). 66 67 is 1 from the start so it matches with 1 from the
+         * bottom. And so on.
+         * Similarly, for top half of loop2valcomp's vals and top half of loop1val2's vals. Start at smallest accessors
+         * for loop1val2's values and go in increasing order, working up from the bottom of the top half of
+         * loop2valcomp's values as you go.*/
+
+        // What if we tried indexing scheme where B is on the right, reversed (so it's 0.....A(B reversed))?
+        // that way, we iterate by +2 (starting at 0, and at 1) to keep same nice property of not having to check first
+        // bit. always same (always different for starting at 1) up until halfway, where it reverses to always different
+        // (always same for starting at 1).
+        //
+        // const int64_t strTEST1 = str & () std::bitset<2 * length> aTEST(A);
     }
 }
 
@@ -257,84 +295,87 @@ void FeasibleTriplet(int n) {
         auto end = std::chrono::system_clock::now();
         std::chrono::duration<double> elapsed_seconds = end - start2;
         cout << "Elapsed time F (s): " << elapsed_seconds.count() << endl;
+        if (i % CALC_EVERY_X_ITERATIONS == 0 || i == n) {
+            start2 = std::chrono::system_clock::now();
+            // TODO: if this uses a vector of mem temporarily, store v2-v1 into v1?
+            const double R = subtract_and_find_max_parallel(v1, v2);
+            end = std::chrono::system_clock::now();
+            elapsed_seconds = end - start2;
+            cout << "Elapsed time (s) mc1: " << elapsed_seconds.count() << endl;
+            //  Beyond this point, v1's values are no longer needed, so we reuse
+            //  its memory for other computations.
 
-        start2 = std::chrono::system_clock::now();
-        // TODO: if this uses a vector of mem temporarily, store v2-v1 into v1?
-        const double R = subtract_and_find_max_parallel(v1, v2);
-        end = std::chrono::system_clock::now();
-        elapsed_seconds = end - start2;
-        cout << "Elapsed time (s) mc1: " << elapsed_seconds.count() << endl;
-        //  Beyond this point, v1's values are no longer needed, so we reuse
-        //  its memory for other computations.
+            // NOTE: THE v1's HERE ARE REUSED MEMORY. v1's VALUES NOT USED, INSTEAD
+            // v1 IS COMPLETELY OVERWRITTEN HERE.
+            // Normally F(v2+R, v2, v0), but I think this ver saves an entire vector
+            // of memory.
+            // TODO: i think you can do this (calculate R and E) only every X iterations
+            start2 = std::chrono::system_clock::now();
+            F_withplusR(R, v2, v1);
+            end = std::chrono::system_clock::now();
+            elapsed_seconds = end - start2;
+            cout << "Elapsed time FpR (s): " << elapsed_seconds.count() << endl;
+            // TODO: INVESTIGATE WHY ABOVE IS SO MUCH FASTER THAN F??
+            // except now it isnt being faster???
 
-        // NOTE: THE v1's HERE ARE REUSED MEMORY. v1's VALUES NOT USED, INSTEAD
-        // v1 IS COMPLETELY OVERWRITTEN HERE.
-        // Normally F(v2+R, v2, v0), but I think this ver saves an entire vector
-        // of memory.
-        start2 = std::chrono::system_clock::now();
-        F_withplusR(R, v2, v1);
-        end = std::chrono::system_clock::now();
-        elapsed_seconds = end - start2;
-        cout << "Elapsed time FpR (s): " << elapsed_seconds.count() << endl;
-        // TODO: INVESTIGATE WHY ABOVE IS SO MUCH FASTER THAN F??
-        // except now it isnt being faster???
+            // Idea: normally below line is ArrayXd W = v2 + 2 * R - v0;
+            // We again reuse v1 to store W, and with single vector v0 is replaced by v1.
+            start2 = std::chrono::system_clock::now();
+            const double E = std::max(subtract_and_find_max_parallel(v1, v2) + 2 * R, 0.0);
+            end = std::chrono::system_clock::now();
+            elapsed_seconds = end - start2;
+            cout << "Elapsed time mc2 (s): " << elapsed_seconds.count() << endl;
 
-        // Idea: normally below line is ArrayXd W = v2 + 2 * R - v0;
-        // We again reuse v1 to store W, and with single vector v0 is replaced by v1.
-        start2 = std::chrono::system_clock::now();
-        const double E = std::max(subtract_and_find_max_parallel(v1, v2) + 2 * R, 0.0);
-        end = std::chrono::system_clock::now();
-        elapsed_seconds = end - start2;
-        cout << "Elapsed time mc2 (s): " << elapsed_seconds.count() << endl;
+            // TODO: +2*R keeps getting added places... wonder if it's at all necessary to do,
+            //  and if we can instead just do it at the end for R and E?
 
-        // TODO: +2*R keeps getting added places... wonder if it's at all necessary to do,
-        //  and if we can instead just do it at the end for R and E?
+            // // FIXME: FIGURE OUT WHAT NEW IF STATEMENT NEEDS TO BE
+            // if (R - E >= r - e) {
+            //     // u = v2;  // u is never used
+            //     r = R;
+            //     e = E;
+            // }
+            r = R;
+            e = E;
 
-        // // FIXME: FIGURE OUT WHAT NEW IF STATEMENT NEEDS TO BE
-        // if (R - E >= r - e) {
-        //     // u = v2;  // u is never used
-        //     r = R;
-        //     e = E;
-        // }
-        r = R;
-        e = E;
+            // FIXME: Need to verify mathematically the correctness of this new calculation.
+            if (PRINT_EVERY_ITER) {
+                // (other quantities of potential interest)
+                // cout << "At n=" << i << ": " << 2.0 * (r - e) << endl;
+                // cout << "At n=" << i << ": " << 2.0 * (r - e) / (1 + (r - e)) << endl;
+                // cout << "At n=" << i << ": " << 2.0 * (e - r) / (1 + (e - r)) << endl;
+                // cout << "At n=" << i << ": " << 2.0 * (e - r) << endl;
+                // cout << "R, E: " << R << " " << E << endl;
+                // cout << (2.0 * r / (1 + r)) << endl;
+                printf("At n=%i: %.9f\n", i, (2.0 * r / (1 + r)) + 2.0 * (r - e) / (1 + (r - e)));
+                end = std::chrono::system_clock::now();
+                elapsed_seconds = end - start;
+                cout << "Elapsed time (s): " << elapsed_seconds.count() << endl;
+            }
+
+            // cout << r << " " << R << endl;
+        }
         // Swap pointers of v1 and v2
         // v0 = v1;
         // v1 = v2;
         std::swap(v1, v2);
-
-        // FIXME: Need to verify mathematically the correctness of this new calculation.
-        if (PRINT_EVERY_ITER) {
-            // (other quantities of potential interest)
-            // cout << "At n=" << i << ": " << 2.0 * (r - e) << endl;
-            // cout << "At n=" << i << ": " << 2.0 * (r - e) / (1 + (r - e)) << endl;
-            // cout << "At n=" << i << ": " << 2.0 * (e - r) / (1 + (e - r)) << endl;
-            // cout << "At n=" << i << ": " << 2.0 * (e - r) << endl;
-            // cout << "R, E: " << R << " " << E << endl;
-            // cout << (2.0 * r / (1 + r)) << endl;
-            printf("At n=%i: %.9f\n", i, (2.0 * r / (1 + r)) + 2.0 * (r - e) / (1 + (r - e)));
-            end = std::chrono::system_clock::now();
-            elapsed_seconds = end - start;
-            cout << "Elapsed time (s): " << elapsed_seconds.count() << endl;
-        }
-
-        // cout << r << " " << R << endl;
     }
 
     // return u, r, e
     // cout << "Result: " << 2.0 * (r - e) << endl;
     printf("Single Vec Result: %.9f\n", 2.0 * r / (1 + r));
     printf("(Alt more acc): %.9f\n", (2.0 * r / (1 + r)) + 2.0 * (r - e) / (1 + (r - e)));
-    // cout << "v1" << endl;
-    // printArray(v1);
-    // cout << "v2" << endl;
-    // printArray(v2);
+    // TODO: compare to Lower
+    //  cout << "v1" << endl;
+    //  printArray(v1);
+    //  cout << "v2" << endl;
+    //  printArray(v2);
 }
 
 int main() {
     cout << "Starting with l = " << length << "..." << endl;
     auto start = std::chrono::system_clock::now();
-    FeasibleTriplet(50);
+    FeasibleTriplet(100);
     auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     cout << "Elapsed time (s): " << elapsed_seconds.count() << endl;
