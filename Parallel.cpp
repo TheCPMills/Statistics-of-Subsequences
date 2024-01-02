@@ -13,7 +13,7 @@ using Eigen::ArrayXd;
 using std::cout;
 using std::endl;
 
-#define length 4
+#define length 3
 #define NUM_THREADS 1
 // Careful: ensure that NUM_THREADS divides 2^(2*length-1) (basically always will for l > 3 if power of 2)
 #define CALC_EVERY_X_ITERATIONS 25
@@ -133,22 +133,28 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
         // Take every other bit (starting at second position)
         const uint64_t B3 = str3 & 0x5555555555555555;
         uint64_t TA0B3 = (TA3 << 2) | B3;
-        uint64_t TA1B3 = TA0B3 | 2;
-        // TODO: there should be a way of doing HALF the calculations, since +2 does nothing?
+        // uint64_t TA1B3 = TA0B3 | 2;
 
-        TA0B3 = std::min(TA0B3, (powminus0 - 1) - TA0B3);
-        TA1B3 = std::min(TA1B3, (powminus0 - 1) - TA1B3);
+        // these lines used to be:
+        // TA0B3 = std::min(TA0B3, (powminus0 - 1) - TA0B3);
+        // TA1B3 = std::min(TA1B3, (powminus0 - 1) - TA1B3);
+        // but can equivalently be written as
+        TA0B3 = (powminus0 - 1) - TA0B3;
+        // TA1B3 = (powminus0 - 1) - TA1B3;
+        // equivalent to taking the complement: (~TA1B3) & (0xFFFFFFFFFFFFFFFF >> 64 - 2 * length);
+        // Below optimization is possible since TA1B3 always equals TA0B3-2;
+        const uint64_t TA1B3 = TA0B3 & (0xFFFFFFFFFFFFFFFF - 2);
 
         const double loop1val = v[ATB0] + v[ATB1];
         const double loop2val = v[TA0B] + v[TA1B];
         const double loop2valcomp = v[TA0B3] + v[TA1B3];
-        ret[str] = 0.5 * std::max(loop1val, loop2valcomp) + R;  //+2*R //TODO:ADD THIS
+        ret[str] = 0.5 * std::max(loop1val, loop2valcomp) + R;
 
         // Compute as in Loop 1 [str4]
         const uint64_t A_2 = TA3;
         const uint64_t TB_2 = B3;
         const uint64_t ATB0_2 = A_2 | (TB_2 << 2);
-        const uint64_t ATB1_2 = ATB0_2 | 1;  // 0b1 <- the smallest bit in B is set to
+        const uint64_t ATB1_2 = ATB0_2 | 1;  // 0b1 <- the smallest bit in B is set to 1
         const double loop1val2 = v[ATB0_2] + v[ATB1_2];
         ret[str4] = 0.5 * std::max(loop2val, loop1val2) + R;
         // TODO: figure out which values in the max are larger if possible
