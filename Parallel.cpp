@@ -124,12 +124,12 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
         // const uint64_t TA = (str2 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);  //equivalent!
         const uint64_t B = TB;
         // const uint64_t B = str2 & 0x5555555555555555; //equivalent!
-        uint64_t TA0B = (TA << 2) | B;  // the smallest bit in A is implicitly set to 0
-        uint64_t TA1B = TA0B | 2;       // 0b10 <- the smallest bit in A is set to 1
+        const uint64_t TA0B = (TA << 2) | B;  // the smallest bit in A is implicitly set to 0
+        const uint64_t TA1B = TA0B | 2;       // 0b10 <- the smallest bit in A is set to 1
 
-        // TODO: may be clever way of figuring out these mins ahead of time
-        TA0B = std::min(TA0B, (powminus0 - 1) - TA0B);
-        TA1B = std::min(TA1B, (powminus0 - 1) - TA1B);
+        // These are no longer necessary
+        // TA0B = std::min(TA0B, (powminus0 - 1) - TA0B);
+        // TA1B = std::min(TA1B, (powminus0 - 1) - TA1B);
 
         // Compute as in Loop 2 [str3]
         const uint64_t TA3 = (str3 & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);
@@ -144,7 +144,7 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
         TA0B3 = (powminus0 - 1) - TA0B3;
         // TA1B3 = (powminus0 - 1) - TA1B3;
         // equivalent to taking the complement: (~TA1B3) & (0xFFFFFFFFFFFFFFFF >> 64 - 2 * length);
-        // Below optimization is possible since TA1B3 always equals TA0B3-2;
+        // Below optimization is possible since TA1B3 always equals TA0B3 but with a 0 at end of B instead of 1;
         const uint64_t TA1B3 = TA0B3 & (0xFFFFFFFFFFFFFFFF - 2);
 
         const double loop1val = v[ATB0] + v[ATB1];
