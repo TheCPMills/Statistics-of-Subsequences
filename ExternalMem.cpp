@@ -92,6 +92,7 @@ double *prepareMap(int fd) {
     /* Now file is ready to be mmapped.*/
     // TODO: probably want to set as bianry
     // TODO: INVESTIGATE MMAP FLAGS
+    // msync or something may be necessary
     map = (double *)mmap(0, FILESIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (map == MAP_FAILED) {
         close(fd);
@@ -102,12 +103,15 @@ double *prepareMap(int fd) {
 }
 
 int fileStuff(int fd, double *map) {
+    // read in from map to array
     Map<ArrayXd> mf(map, 4);
     cout << mf;
 
+    // write to extern memory
     auto source = &mf(0);
     std::memcpy(map + (sizeof(double)) * 4, source, (sizeof(double)) * 4);
 
+    // read in starting at 5th value
     Map<ArrayXd> mf2(map + (sizeof(double)) * 4, 4);
     mf2 = mf2 + 2;
     cout << mf2;

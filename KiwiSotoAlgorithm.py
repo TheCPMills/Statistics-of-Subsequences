@@ -12,19 +12,35 @@ def FeasibleTriplet(length, n):
     (u, r, e) = (np.zeros(2 ** (2 * length - 1)), 0, 0)
 
     for i in range(2, n + 1):
-        v2 = F(v1, v0, length) # I CHANGED v0 to v1 IN SECOND LOC
+        v2 = F(v1, v1, length) # I CHANGED v0 to v1 IN SECOND LOC
         R = np.max(v2 - v1)
         W = v2 + 2 * R - F(v2 + R, v2, length)
         E = max(0, np.max(W))
 
         if R - E >= r - e:
             (u, r, e) = (v2, R, E)
+        agh = np.min(v2-v1)
+
         v0 = v1
         v1 = v2
         # print(v1)
         # print(v2)
-        print(R, E)
-        r = R
+        # print(R, E)
+        # r = R
+        # e = E
+        #print("at ",i,":  R:  ",(R*25000000),"  E: ",(E*25000000), ((E-2*R)*25000000) )
+        print("agh",2*agh/(1+agh))
+        print("at ",i,":  R:  ",R,"  E: ",E )
+        print("E:", E*25000000, "   R:", R*25000000)
+        print(2*(R-E))
+        EmR = 2*R-E
+        print(2*EmR/(1+EmR))
+        # print(2.0 * r / (1 + r))
+        # print(2.0 * (r) / (1 + (r-e)))
+        # print(2.0 * (r) / (1 + (r-e)))
+        # print(r-e)
+    print(v0)
+    print(v1)
     return u, r, e
 
 
@@ -41,7 +57,7 @@ def F(v1, v2, length):
 
 
 def F_01(v, length):
-    print("NEW ITER")
+    #print("NEW ITER")
     ret = np.zeros(2 ** (2 * length - 1))
 
     start = 2 ** (2 * length - 2)
@@ -63,7 +79,7 @@ def F_01(v, length):
         ATB0 = min(ATB0, (2 ** (2 * length) - 1) - ATB0)
         ATB1 = min(ATB1, (2 ** (2 * length) - 1) - ATB1)
         ret[st - start] = v[ATB0] + v[ATB1]  # if h(A) != h(B) and h(A) = z
-        print(st-start)
+        #print(st-start)
 
     for st in range(2 * start, 3 * start):
         # For st = (A, B),
@@ -77,7 +93,7 @@ def F_01(v, length):
         TA0B = min(TA0B, (2 ** (2 * length) - 1) - TA0B)
         TA1B = min(TA1B, (2 ** (2 * length) - 1) - TA1B)
         ret[st - start] = v[TA0B] + v[TA1B]  # if h(A) != h(B) and h(B) = z
-        print(st-start)
+        #print(st-start)
 
     return ret
 
@@ -106,8 +122,8 @@ def F_12(v, length):
 
 
 def main():
-    for i in range(1, 11):
-        (v, r, e) = FeasibleTriplet(i, 100)
+    for i in range(1, 2):
+        (v, r, e) = FeasibleTriplet(4, 40)
         print(2*(r - e))
         print(2.0 * r / (1 + r))
 

@@ -13,10 +13,10 @@ using Eigen::ArrayXd;
 using std::cout;
 using std::endl;
 
-#define length 3
+#define length 5
 #define NUM_THREADS 1
 // Careful: ensure that NUM_THREADS divides 2^(2*length-1) (basically always will for l > 3 if power of 2)
-#define CALC_EVERY_X_ITERATIONS 25
+#define CALC_EVERY_X_ITERATIONS 1
 
 const bool PRINT_EVERY_ITER = true;
 
@@ -51,10 +51,34 @@ double subtract_and_find_max_parallel(const ArrayXd &v1, const ArrayXd &v2) {
     std::future<double> maxVals[NUM_THREADS];
     const uint64_t incr = powminus1 / NUM_THREADS;
 
-    // TODO: see if writing own function to do this insttead of Eigen is faster
     // Function to calculate the maximum coefficient in a particular (start...end) slice
     auto findMax = [&v1, &v2](uint64_t start, uint64_t end) {
         return (v2(Eigen::seq(start, end - 1)) - v1(Eigen::seq(start, end - 1))).maxCoeff();
+    };
+
+    // Set threads to calculate the max coef in their own smaller slices
+    for (int i = 0; i < NUM_THREADS; i++) {
+        maxVals[i] = std::async(std::launch::async, findMax, incr * i, incr * (i + 1));
+    }
+
+    // Now calculate the global max
+    double R = maxVals[0].get();  // .get() waits until the thread completes
+    for (int i = 1; i < NUM_THREADS; i++) {
+        double coef = maxVals[i].get();
+        if (coef > R) {
+            R = coef;
+        }
+    }
+    return R;
+}
+
+double subtract_and_find_min_parallel(const ArrayXd &v1, const ArrayXd &v2) {
+    std::future<double> maxVals[NUM_THREADS];
+    const uint64_t incr = powminus1 / NUM_THREADS;
+
+    // Function to calculate the maximum coefficient in a particular (start...end) slice
+    auto findMax = [&v1, &v2](uint64_t start, uint64_t end) {
+        return (v2(Eigen::seq(start, end - 1)) - v1(Eigen::seq(start, end - 1))).minCoeff();
     };
 
     // Set threads to calculate the max coef in their own smaller slices
@@ -94,18 +118,24 @@ double subtract_and_find_max_parallel(const ArrayXd &v1, const ArrayXd &v2) {
  * [                         |-->           |           <--]-->          |           <--|
  * 0                       powm2         +powm3          powm1        +powm3         +powm2
  *
+ * ret[...]
+ * 4
+ *
  *
  * A few other notes to understand this code:
  * - 0xAA... is the binary string 10101010..., meaning str & 0xAA... gives us A.
  * - Similarly, 0x55... is the binary string 01010101..., meaning str & 0x55... gives us B.
  * - Doing & (powminus2 - 1) zeros out the first bit of A and of B since (powminus2-1) is 0s until the 2nd
  * bit of str and 1s after. Similarly, doing & (powminus1 - 1) zeros out only the first bit of A.*/
-void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret, const double R) {
+void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, ArrayXd &ret, const double R,
+                   const int threadNum) {
+    auto startTime = std::chrono::system_clock::now();
     for (uint64_t str = start; str < end; str++) {
         // save val for loop 2
-        const uint64_t str2 = str + powminus2;
+        const uint64_t str2 = str + powminus2;  // can also set to -powminus2 (adjusting below accordingly)
         // above will ALWAYS have the effect of setting biggest 1 to 0, and putting 1 to left
         const uint64_t str3 = powminus0 + powminus2 - 1 - str2;
+        // could instead set above to -powminus2 and below to +powminus2
         const uint64_t str4 = str3 - powminus2;
         // may be able to do each of these +'s and -'s as 2 bitwise ops? &, |, or ~?
 
@@ -144,7 +174,7 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
         TA0B3 = (powminus0 - 1) - TA0B3;
         // TA1B3 = (powminus0 - 1) - TA1B3;
         // equivalent to taking the complement: (~TA1B3) & (0xFFFFFFFFFFFFFFFF >> 64 - 2 * length);
-        // Below optimization is possible since TA1B3 always equals TA0B3 but with a 0 at end of B instead of 1;
+        // Below optimization is possible since TA1B3 always equals TA0B3 but with a 0 at end of A instead of 1;
         const uint64_t TA1B3 = TA0B3 & (0xFFFFFFFFFFFFFFFF - 2);
 
         const double loop1val = v[ATB0] + v[ATB1];
@@ -180,7 +210,7 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
         // }
 
         //  TODO: loop2val is symmetric USE THIS FACT!
-
+        // printf("AT %i:  %f %f %f %f \n", str - start, loop1val, loop2val, loop2valcomp, loop1val2);
         //(+R because +R in each v value, but then 0.5*result)
         // printf("AT %i:  %f %f %f %f   %i %i  %i %i  %i %i  %i %i\n", str - start, loop1val, loop2val, loop2valcomp,
         //        loop1val2, ATB0, ATB1, TA0B, TA1B, TA0B3, TA1B3, ATB0_2, ATB1_2);
@@ -193,6 +223,11 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
          * Similarly, for top half of loop2valcomp's vals and top half of loop1val2's vals. Start at smallest accessors
          * for loop1val2's values and go in increasing order, working up from the bottom of the top half of
          * loop2valcomp's values as you go.*/
+        // WAIT IT MIGHT BE A RECURSIVE PATTERN
+        // BREAK INTO 4 BLOCKS:
+        //(for 1st col, 3rd col)
+        // REVERSE ENTIRE COL, THEN REVERSE MIDDLE HALF (1/4 to 3/4)
+        // then in each block (1/4 size) do same again
 
         // What if we tried indexing scheme where B is on the right, reversed (so it's 0.....A(B reversed))?
         // that way, we iterate by +2 (starting at 0, and at 1) to keep same nice property of not having to check first
@@ -200,7 +235,14 @@ void F_01_combined(const uint64_t start, const uint64_t end, const ArrayXd &v, A
         // (always same for starting at 1).
         //
         // const int64_t strTEST1 = str & () std::bitset<2 * length> aTEST(A);
+
+        // TODO: I wonder if it's possible to look at (in case of mismatching bits) check if next two bits also don't
+        // match (e.g. 10 and 01) and then say it's 1 + (...) since over those two bits you get exactly 1 match
     }
+    auto endTime = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = endTime - startTime;
+    printf("Thread %i time taken: %f\n", threadNum, elapsed_seconds.count());
+    // TODO: threads are taking a significantly variable amount of time. implement a pooling scheme.
 }
 
 void F_01(const ArrayXd &v, ArrayXd &ret, const double R) {
@@ -210,7 +252,7 @@ void F_01(const ArrayXd &v, ArrayXd &ret, const double R) {
     const uint64_t incr = (end - start) / (NUM_THREADS);
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i] =
-            std::thread(F_01_combined, start + incr * i, start + incr * (i + 1), std::cref(v), std::ref(ret), R);
+            std::thread(F_01_combined, start + incr * i, start + incr * (i + 1), std::cref(v), std::ref(ret), R, i);
     }
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i].join();
@@ -264,18 +306,18 @@ void F(const ArrayXd &v1, const ArrayXd &v2, ArrayXd &ret) {
     F_01(v1, ret, 0);
     auto end2 = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end2 - start2;
-    cout << "Elapsed time F1 (s): " << elapsed_seconds.count() << endl;
+    cout << "Elapsed time F_01 (s): " << elapsed_seconds.count() << endl;
 
     //  Puts f_double into the first half of the ret vector
     start2 = std::chrono::system_clock::now();
     F_12(v2, ret);
     end2 = std::chrono::system_clock::now();
     elapsed_seconds = end2 - start2;
-    cout << "Elapsed time F3 (s): " << elapsed_seconds.count() << endl;
+    cout << "Elapsed time F_12 (s): " << elapsed_seconds.count() << endl;
 }
 
 // Exactly like F, but saves memory as it can be fed v, v+R but use only one vector
-void F_withplusR(const double R, ArrayXd &v2, ArrayXd &ret) {
+void F_withplusR(const double R, const ArrayXd &v2, ArrayXd &ret) {
     // v2+R is normally fed to F_01. However, we can actually avoid doing so.
 
     // v2+R is NOT fed to F_01. Instead, since ret[] is always set to v[] + v[], we can just add 2*R at the end.
@@ -307,6 +349,7 @@ void FeasibleTriplet(int n) {
             start2 = std::chrono::system_clock::now();
             // TODO: if this uses a vector of mem temporarily, store v2-v1 into v1?
             const double R = subtract_and_find_max_parallel(v1, v2);
+            printArray(v2);
             end = std::chrono::system_clock::now();
             elapsed_seconds = end - start2;
             cout << "Elapsed time (s) mc1: " << elapsed_seconds.count() << endl;
@@ -383,7 +426,7 @@ void FeasibleTriplet(int n) {
 int main() {
     cout << "Starting with l = " << length << "..." << endl;
     auto start = std::chrono::system_clock::now();
-    FeasibleTriplet(100);
+    FeasibleTriplet(5);
     auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     cout << "Elapsed time (s): " << elapsed_seconds.count() << endl;
