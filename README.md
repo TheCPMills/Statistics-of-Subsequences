@@ -15,4 +15,4 @@ As of Jan 29, 2024, the up-to-date versions are:
 NOTE: the contents of eigen-3.4.0 are NOT written by us. This is the location of the Eigen 3 library (which has been imported directly into the repository, as recommended). Eigen 3 is licensed under MPL2. See Eigen 3 documentation [here](https://eigen.tuxfamily.org/index) and source code [here](https://gitlab.com/libeigen/eigen).
 
 
-We have not yet created a make file. To run, make sure you have a c++ compiler installed. Then, navigate to this directory, and run `g++ -O3 -I -pthread ./eigen-3.4.0/ ./Parallel.cpp -o Parallel` and then run `./SVNoCopy` (or `./SVNoCopy.exe` on Windows).
+We have not yet created a make file. To run, make sure you have a c++ compiler installed. Then, navigate to this directory, and run `g++ -O3 -I -pthread ./eigen-3.4.0/ ./Parallel.cpp -o Parallel` and then run `./Parallel` (or `./Parallel.exe` on Windows).
