@@ -1,4 +1,4 @@
-// #define EIGEN_NO_DEBUG 1
+#define EIGEN_NO_DEBUG 1
 //   TODO: PUT ABOVE BACK
 
 #include <fcntl.h>
@@ -23,7 +23,7 @@ using Eigen::Map;
 using std::cout;
 using std::endl;
 
-#define length 3
+#define length 2
 #define NUM_THREADS 1
 // Careful: ensure that NUM_THREADS divides 2^(2*length-1) (basically always will for l > 3 if power of 2)
 #define CALC_EVERY_X_ITERATIONS 25
@@ -43,7 +43,14 @@ const uint64_t powminus2 = uint64_t(1) << ((2 * length) - 2);
 const uint64_t powminus3 = uint64_t(1) << ((2 * length) - 3);
 
 // define the size of the file (in bytes) needed to store a single full vector
-const uint64_t FILESIZE = powminus1 * sizeof(double);
+const uint64_t TOTAL_VEC_SIZE = powminus1 * sizeof(double);
+#define SINGLE_MAP_SIZE (2 * ONE_GB)
+#define SINGLE_MAP_ENTRIES (SINGLE_MAP_SIZE / sizeof(double))
+
+#define v_ValAt(val) v[(val) / SINGLE_MAP_ENTRIES][(val) % SINGLE_MAP_ENTRIES]
+#define ret_ValAt(val) ret[(val) / SINGLE_MAP_ENTRIES][(val) % SINGLE_MAP_ENTRIES]
+#define v1_ValAt(val) v1[(val) / SINGLE_MAP_ENTRIES][(val) % SINGLE_MAP_ENTRIES]
+#define v2_ValAt(val) v2[(val) / SINGLE_MAP_ENTRIES][(val) % SINGLE_MAP_ENTRIES]
 
 template <typename Derived>
 void printArray(const Eigen::ArrayBase<Derived> &arr) {
@@ -59,18 +66,10 @@ void printArrayMap(const double *arr, const int len) {
     cout << endl;
 }
 
-struct arrayAccessor {
-    int mmapNum;
-    uint64_t mmapIndex;
-};
-
-// TODO: convert to much better macro
-arrayAccessor arrayPos(uint64_t val) {
-    arrayAccessor a;
-
-    a.mmapNum = val / (ONE_GB * 2);
-    a.mmapIndex = val % ONE_GB * 2;
-    return a;
+double secondsSince(std::chrono::system_clock::time_point startTime) {
+    auto endTime = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = endTime - startTime;
+    return elapsed_seconds.count();
 }
 
 // void loopUntilTolerance(double tol){
@@ -83,15 +82,17 @@ arrayAccessor arrayPos(uint64_t val) {
     So instead we break that calculation up across threads.
     Additionally, E = std::max(0.0, (v2 + 2 * R - v1).maxCoeff()). We can use
     this function for that as well, and just add 2*R at the end. */
-double subtract_and_find_max_parallel(const double *v1, const double *v2) {
+double subtract_and_find_max_parallel(double **v1, double **v2) {
     std::future<double> maxVals[NUM_THREADS];
     const uint64_t incr = powminus1 / NUM_THREADS;
 
     // Function to calculate the maximum coefficient in a particular (start...end) slice
     auto findMax = [v1, v2](uint64_t start, uint64_t end) {
-        Map<const ArrayXd> vecv2(v2 + start, end - start);
-        Map<const ArrayXd> vecv1(v1 + start, end - start);
-        return (vecv2 - vecv1).maxCoeff();
+        double maxCoef = -INFINITY;
+        for (uint64_t str = start; str < end; str++) {
+            maxCoef = std::max(maxCoef, v2_ValAt(str) - v1_ValAt(str));
+        }
+        return maxCoef;
     };
 
     // THIS FUNCTION SHOULDNT NEED AS MUCH CHANGING. CAN JUST SET EACH THREAD TO HANDLE THE MIN BETWEEN
@@ -139,7 +140,7 @@ double subtract_and_find_max_parallel(const double *v1, const double *v2) {
  * - Similarly, 0x55... is the binary string 01010101..., meaning str & 0x55... gives us B.
  * - Doing & (powminus2 - 1) zeros out the first bit of A and of B since (powminus2-1) is 0s until the 2nd
  * bit of str and 1s after. Similarly, doing & (powminus1 - 1) zeros out only the first bit of A.*/
-void F_01_combined(const uint64_t start, const uint64_t end, const double *v, double *ret, const double R,
+void F_01_combined(const uint64_t start, const uint64_t end, double **v, double **ret, const double R,
                    const int threadNum) {
     auto startTime = std::chrono::system_clock::now();
     for (uint64_t str = start; str < end; str++) {
@@ -188,18 +189,18 @@ void F_01_combined(const uint64_t start, const uint64_t end, const double *v, do
         // Below optimization is possible since TA1B3 always equals TA0B3 but with a 0 at end of B instead of 1;
         const uint64_t TA1B3 = TA0B3 & (0xFFFFFFFFFFFFFFFF - 2);
 
-        const double loop1val = v[ATB0] + v[ATB1];
-        const double loop2val = v[TA0B] + v[TA1B];
-        const double loop2valcomp = v[TA0B3] + v[TA1B3];
-        ret[str] = 0.5 * std::max(loop1val, loop2valcomp) + R;
+        const double loop1val = v_ValAt(ATB0) + v_ValAt(ATB1);
+        const double loop2val = v_ValAt(TA0B) + v_ValAt(TA1B);
+        const double loop2valcomp = v_ValAt(TA0B3) + v_ValAt(TA1B3);
+        ret_ValAt(str) = 0.5 * std::max(loop1val, loop2valcomp) + R;
 
         // Compute as in Loop 1 [str4]
         const uint64_t A_2 = TA3;
         const uint64_t TB_2 = B3;
         const uint64_t ATB0_2 = A_2 | (TB_2 << 2);  // the smallest bit in B is implicitly set to 0
         const uint64_t ATB1_2 = ATB0_2 | 1;         // 0b1 <- the smallest bit in B is set to 1
-        const double loop1val2 = v[ATB0_2] + v[ATB1_2];
-        ret[str4] = 0.5 * std::max(loop2val, loop1val2) + R;
+        const double loop1val2 = v_ValAt(ATB0_2) + v_ValAt(ATB1_2);
+        ret_ValAt(str4) = 0.5 * std::max(loop2val, loop1val2) + R;
         // TODO: figure out which values in the max are larger if possible
         // if (loop2val > loop1val2) {
         //     cout << "CASE 1\n";
@@ -248,14 +249,14 @@ void F_01_combined(const uint64_t start, const uint64_t end, const double *v, do
     // TODO: threads are taking a significantly variable amount of time. implement a pooling scheme.
 }
 
-void F_01(const double *v, double *ret, const double R) {
+void F_01(double **v, double **ret, const double R) {
     const uint64_t start = powminus2;
     const uint64_t end = powminus2 + powminus3;
     std::thread threads[NUM_THREADS];
     const uint64_t incr = (end - start) / (NUM_THREADS);
     for (int i = 0; i < NUM_THREADS; i++) {
-        threads[i] =
-            std::thread(F_01_combined, start + incr * i, start + incr * (i + 1), std::cref(v), std::ref(ret), R, i);
+        threads[i] = std::thread(F_01_combined, start + incr * i, start + incr * (i + 1), std::cref(std::cref(v)),
+                                 std::ref(std::ref(ret)), R, i);
     }
     for (int i = 0; i < NUM_THREADS; i++) {
         threads[i].join();
@@ -264,7 +265,7 @@ void F_01(const double *v, double *ret, const double R) {
     //  return ret;
 }
 
-void F_12(const double *v, double *ret) {
+void F_12(double **v, double **ret) {
     auto loop = [v, ret](uint64_t start, uint64_t end) {
         for (uint64_t str = start; str < end; str++) {
             // const uint64_t TA = (str & 0xAAAAAAAAAAAAAAAA) & (powminus1 - 1);
@@ -283,8 +284,9 @@ void F_12(const double *v, double *ret) {
             // TA1TB0 = std::min(TA1TB0, (powminus0 - 1) - TA1TB0);
             // TA1TB1 = std::min(TA1TB1, (powminus0 - 1) - TA1TB1);
 
-            ret[str] = 1 + .25 * (v[TA0TB0] + v[TA0TB1] + v[TA1TB0] + v[TA1TB1]);
-            ret[powminus2 - 1 - str] = ret[str];  // array is self-symmetric!
+            // TODO: may be able to optimize these memory accesses
+            ret_ValAt(str) = 1 + .25 * (v_ValAt(TA0TB0) + v_ValAt(TA0TB1) + v_ValAt(TA1TB0) + v_ValAt(TA1TB1));
+            ret_ValAt(powminus2 - 1 - str) = ret_ValAt(str);  // array is self-symmetric!
             // TODO: see if can use this symmetry to reduce space needed
         }
     };
@@ -303,24 +305,20 @@ void F_12(const double *v, double *ret) {
 }
 
 // (remember: any changes made in here have to be made in F_withplusR as well)
-void F(const double *v1, const double *v2, double *ret) {
+void F(double **v1, double **v2, double **ret) {
     // Computes f01 and f11, does their elementwise maximum, and places it into second half of ret
     auto start2 = std::chrono::system_clock::now();
     F_01(v1, ret, 0);
-    auto end2 = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end2 - start2;
-    cout << "Elapsed time F_01 (s): " << elapsed_seconds.count() << endl;
+    cout << "Elapsed time F_01 (s): " << secondsSince(start2) << endl;
 
     //  Puts f_double into the first half of the ret vector
     start2 = std::chrono::system_clock::now();
     F_12(v2, ret);
-    end2 = std::chrono::system_clock::now();
-    elapsed_seconds = end2 - start2;
-    cout << "Elapsed time F_12 (s): " << elapsed_seconds.count() << endl;
+    cout << "Elapsed time F_12 (s): " << secondsSince(start2) << endl;
 }
 
 // Exactly like F, but saves memory as it can be fed v, v+R but use only one vector
-void F_withplusR(const double R, const double *v2, double *ret) {
+void F_withplusR(const double R, double **v2, double **ret) {
     // v2+R is normally fed to F_01. However, we can actually avoid doing so.
 
     // v2+R is NOT fed to F_01. Instead, since ret[] is always set to v[] + v[], we can just add 2*R at the end.
@@ -346,12 +344,12 @@ int openFile(std::string filepath) {
     }
     return fd;
 }
-
-// TODO: CAN CLOSE FILE DESCRIPTOR AFTER INITING MAP?
+// https://stackoverflow.com/questions/21119617/does-mmap-or-malloc-allocate-ram
+//  TODO: CAN CLOSE FILE DESCRIPTOR AFTER INITING MAP?
 
 // TODO: is this passing by value?
 void closeFile(int fd, double *map) {
-    if (munmap(map, FILESIZE) == -1) {
+    if (munmap(map, TOTAL_VEC_SIZE) == -1) {
         perror("Error un-mmapping the file");
     }
     close(fd);
@@ -360,7 +358,7 @@ void closeFile(int fd, double *map) {
 double *prepareMap(int fd) {
     double *map;
     /* Stretch file size to the size of the vector we need to store*/
-    if (lseek(fd, FILESIZE - 1, SEEK_SET) == -1) {
+    if (lseek(fd, TOTAL_VEC_SIZE - 1, SEEK_SET) == -1) {
         close(fd);
         perror("Error calling lseek() to 'stretch' the file");
         exit(EXIT_FAILURE);
@@ -380,69 +378,53 @@ double *prepareMap(int fd) {
     // TODO: probably want to set as bianry
     // TODO: INVESTIGATE MMAP FLAGS
     // msync or something may be necessary
-    map = (double *)mmap(0, FILESIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    map = (double *)mmap(0, SINGLE_MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (map == MAP_FAILED) {
         close(fd);
         perror("Error mmapping the file");
         exit(EXIT_FAILURE);
     }
+    close(fd);
     return map;
 }
 
 // check this https://stackoverflow.com/questions/13024087/what-are-memory-mapped-page-and-anonymous-page
 
-int fileStuff(int fd, double *map) {
-    // read in from map to array
-    Map<ArrayXd> mf(map, 4);
-    cout << mf;
-
-    // write to extern memory
-    auto source = &mf(0);
-    std::memcpy(map + (sizeof(double)) * 4, source, (sizeof(double)) * 4);
-
-    // read in starting at 5th value
-    Map<ArrayXd> mf2(map + (sizeof(double)) * 4, 4);
-    mf2 = mf2 + 2;
-    cout << mf2;
-    return 0;
-}
-
-void initVectorMaps(double **vecmmaps, std::string fileprefix) {
-    // create enough mmaps for one vector
-    // GB = 1024^3 bytes
-    // one vector is powminus1 * 8 bytes large
-    if (FILESIZE < ONE_GB * 2) {
+// Create enough (shared, anonymous) mmaps for one vector
+void initVectorMaps(double **vecmmaps, std::string fileprefix, const bool zeroInit) {
+    if (TOTAL_VEC_SIZE < SINGLE_MAP_SIZE) {
         cout << "NO MMAPING NEEDED PLS RECONSIDER, THIS WILL PROBABLY BREAK\n";
     }
-    const int num_maps = FILESIZE / (ONE_GB * 2);
+    if (TOTAL_VEC_SIZE % SINGLE_MAP_SIZE != 0) {
+        cout << "Error: SINGLE_MAP_SIZE must divide TOTAL_VEC_SIZE!";
+    }
+    const int num_maps = TOTAL_VEC_SIZE / SINGLE_MAP_SIZE;
     for (int i = 0; i < num_maps; i++) {
-        int fd = openFile((fileprefix + std::to_string(i) + ".bin").c_str());
+        // Names probably not actually be necessary for anon maps
+        int fd = openFile((fileprefix + "-" + std::to_string(i) + ".bin").c_str());
         vecmmaps[i] = prepareMap(fd);  // todo: verify is copying by reference
+        if (zeroInit) {
+            std::memset(vecmmaps[i], 0, SINGLE_MAP_SIZE);
+        }
+        if (num_maps >= 10) {
+            if (i % (num_maps / 10) == 0) {
+                printf("Done making %i of %i maps...\n", i, num_maps);
+            }
+        }
     }
 }
 
 void FeasibleTriplet(int n) {
-    // for now doing it with only 1 mmaped region per array. first see if that works (prob wont). if not switch to more.
-    int fd_v1 = openFile("./mmappedv1.bin");
-    // a pointer to the start of the mmaped region (I think)
-    double *mapv1 = prepareMap(fd_v1);
-    std::memset(mapv1, 0, FILESIZE);  // set all values to 0
-    int fd_v2 = openFile("./mmappedv2.bin");
-    double *mapv2 = prepareMap(fd_v2);
-
-    // TODO: replace 4 with number of things to read
-    // for (int i = 0; i < 10; i++) {
-    // }
-    // idk if actually reads into voltaile mem?
-    Map<ArrayXd> vec(mapv1, 4);
-    int v1mmaps[FILESIZE / (ONE_GB * 2)];
-
-    //  ArrayXd v0 = ArrayXd::Zero(powminus1); // unneeded in single vec impl
     auto start = std::chrono::system_clock::now();
-    // ArrayXd v1 = ArrayXd::Zero(powminus1);
+    // Anonymous maps are already guaranteed to be 0-filled
+    double *v1maps[TOTAL_VEC_SIZE / SINGLE_MAP_SIZE];  // contains pointers to the maps that comprise v1
+    initVectorMaps(v1maps, "./mmappedv1", true);
+    double *v2maps[TOTAL_VEC_SIZE / SINGLE_MAP_SIZE];  // contains pointers to the maps that comprise v2
+    initVectorMaps(v2maps, "./mmappedv2", false);
+
+    printf("Maps prepared in %f seconds\n", secondsSince(start));
 
     // ArrayXd u = ArrayXd::Zero(powminus1);  // u never used
-    // ArrayXd v2(powminus1);  // we pass a pointer to this, and have it get filled in
 
     double r = 0;
     double e = 0;
@@ -450,17 +432,14 @@ void FeasibleTriplet(int n) {
         // Writes new vector (v2) into v2
         auto start2 = std::chrono::system_clock::now();
 
-        F(mapv1, mapv1, mapv2);
-        auto end = std::chrono::system_clock::now();
-        std::chrono::duration<double> elapsed_seconds = end - start2;
-        cout << "Elapsed time F (s): " << elapsed_seconds.count() << endl;
+        F(v1maps, v1maps, v2maps);
+        cout << "Elapsed time F (s): " << secondsSince(start2) << endl;
         if (i % CALC_EVERY_X_ITERATIONS == 0 || i == n) {
             start2 = std::chrono::system_clock::now();
             // TODO: if this uses a vector of mem temporarily, store v2-v1 into v1?
-            const double R = subtract_and_find_max_parallel(mapv1, mapv2);
-            end = std::chrono::system_clock::now();
-            elapsed_seconds = end - start2;
-            cout << "Elapsed time (s) mc1: " << elapsed_seconds.count() << endl;
+            const double R = subtract_and_find_max_parallel(v1maps, v2maps);
+
+            cout << "Elapsed time (s) mc1: " << secondsSince(start2) << endl;
             //  Beyond this point, v1's values are no longer needed, so we reuse
             //  its memory for other computations.
 
@@ -470,20 +449,16 @@ void FeasibleTriplet(int n) {
             // of memory.
             // TODO: i think you can do this (calculate R and E) only every X iterations
             start2 = std::chrono::system_clock::now();
-            F_withplusR(R, mapv2, mapv1);
-            end = std::chrono::system_clock::now();
-            elapsed_seconds = end - start2;
-            cout << "Elapsed time FpR (s): " << elapsed_seconds.count() << endl;
+            F_withplusR(R, v2maps, v1maps);
+            cout << "Elapsed time FpR (s): " << secondsSince(start2) << endl;
             // TODO: INVESTIGATE WHY ABOVE IS SO MUCH FASTER THAN F??
             // except now it isnt being faster???
 
             // Idea: normally below line is ArrayXd W = v2 + 2 * R - v0;
             // We again reuse v1 to store W, and with single vector v0 is replaced by v1.
             start2 = std::chrono::system_clock::now();
-            const double E = std::max(subtract_and_find_max_parallel(mapv1, mapv2) + 2 * R, 0.0);
-            end = std::chrono::system_clock::now();
-            elapsed_seconds = end - start2;
-            cout << "Elapsed time mc2 (s): " << elapsed_seconds.count() << endl;
+            const double E = std::max(subtract_and_find_max_parallel(v1maps, v2maps) + 2 * R, 0.0);
+            cout << "Elapsed time mc2 (s): " << secondsSince(start2) << endl;
 
             // TODO: +2*R keeps getting added places... wonder if it's at all necessary to do,
             //  and if we can instead just do it at the end for R and E?
@@ -507,17 +482,16 @@ void FeasibleTriplet(int n) {
                 // cout << "R, E: " << R << " " << E << endl;
                 // cout << (2.0 * r / (1 + r)) << endl;
                 printf("At n=%i: %.9f\n", i, (2.0 * r / (1 + r)) + 2.0 * (r - e) / (1 + (r - e)));
-                end = std::chrono::system_clock::now();
-                elapsed_seconds = end - start;
-                cout << "Elapsed time (s): " << elapsed_seconds.count() << endl;
+                cout << "Elapsed time (s): " << secondsSince(start) << endl;
             }
 
-            // cout << r << " " << R << endl;
+        } else if (PRINT_EVERY_ITER) {
+            printf("Elapsed time (s) at n=%i: %f\n", i, secondsSince(start));
         }
         // Swap pointers of v1 and v2
         // v0 = v1;
         // v1 = v2;
-        std::swap(mapv1, mapv2);
+        std::swap(v1maps, v2maps);
     }
 
     // return u, r, e
@@ -529,15 +503,25 @@ void FeasibleTriplet(int n) {
     //  printArray(v1);
     //  cout << "v2" << endl;
     //  printArray(v2);
+
+    cout << "Performing cleanup...\n";
+    const int num_maps = TOTAL_VEC_SIZE / SINGLE_MAP_SIZE;
+    for (int i = 0; i < num_maps; i++) {
+        munmap(v1maps[i], SINGLE_MAP_SIZE);
+        munmap(v2maps[i], SINGLE_MAP_SIZE);
+        std::remove(("./mmappedv1-" + std::to_string(i) + ".bin").c_str());
+        std::remove(("./mmappedv2-" + std::to_string(i) + ".bin").c_str());
+    }
 }
 
 int main() {
     cout << "Starting with l = " << length << "..." << endl;
+    cout << "Vector size in bytes: " << TOTAL_VEC_SIZE << endl;
+    cout << "Map size in bytes: " << SINGLE_MAP_SIZE << " (" << TOTAL_VEC_SIZE / SINGLE_MAP_SIZE << " maps)\n";
+    cout << "Threads: " << NUM_THREADS << " (+1)" << endl;
     auto start = std::chrono::system_clock::now();
-    FeasibleTriplet(100);
-    auto end = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end - start;
-    cout << "Elapsed time (s): " << elapsed_seconds.count() << endl;
+    FeasibleTriplet(175);
+    cout << "Elapsed time (s): " << secondsSince(start) << endl;
     // TODO: check if eigen init parallel is something to do
     return 0;
 }
