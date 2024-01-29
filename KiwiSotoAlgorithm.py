@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 
 
@@ -6,23 +8,16 @@ import numpy as np
 # Note: binary operations below rely on 32-bit constants. This also means that program can only currently calculate up
 # to length 16 without overflow. Easy to change, but be careful of overflow
 def FeasibleTriplet(length, n):
-    v0 = np.zeros(2 ** (2 * length - 1))
     v1 = np.zeros(2 ** (2 * length - 1))
 
-    (u, r, e) = (np.zeros(2 ** (2 * length - 1)), 0, 0)
-
     for i in range(2, n + 1):
-        v2 = F(v1, v0, length)
+        v2 = F(v1, v1, length)
         R = np.max(v2 - v1)
-        W = v2 + 2 * R - F(v2 + R, v2, length)
-        E = max(0, np.max(W))
+        E = np.min(v2 - v1)
 
-        if R - E >= r - e:
-            (u, r, e) = (v2, R, E)
-        v0 = v1
         v1 = v2
 
-    return u, r, e
+    return v2, R, E
 
 
 # note: b is 1 where v1 and v2 start with the same character and 0 otherwise
@@ -31,7 +26,7 @@ def F(v1, v2, length):
     f11 = np.flip(f11)
     f_double = F_12(v2, length)
 
-    # b + max
+    # b + max(0.5 f_0,1 + 0.25 f_0,2, 0.5 f_1,1 + 0.25 f_1,2)
     b_combined = np.concatenate((1 + 0.25 * f_double, 0.5 * np.maximum(f01, f11)))
     return b_combined
 
@@ -45,7 +40,7 @@ def F_01(v, length):
     # st & 0xAAAAAAAA = only even bits of st, corresponding to bits in A
     # st & 0x55555555 = only odd bits of st, corresponding to bits in B
 
-    # range1 is the range of ordered string pairs (A, B) where h(A) = z and h(B) != z
+    # range1 is the range of ordered string pairs (A, B) where h(A) = 0 and h(B) = 1
     for st in range(start, 2 * start):
         # For st = (A, B),
         # v[(A, T(B)0)] + v[(A, T(B)1)]
@@ -57,7 +52,7 @@ def F_01(v, length):
         # Transform indices to symmetrical position if they would be in right half of vector v
         ATB0 = min(ATB0, (2 ** (2 * length) - 1) - ATB0)
         ATB1 = min(ATB1, (2 ** (2 * length) - 1) - ATB1)
-        ret[st - start] = v[ATB0] + v[ATB1]  # if h(A) != h(B) and h(A) = z
+        ret[st - start] = v[ATB0] + v[ATB1]  # if h(A) = 1 and h(B) = 0
 
     for st in range(2 * start, 3 * start):
         # For st = (A, B),
@@ -99,9 +94,11 @@ def F_12(v, length):
 
 
 def main():
-    for i in range(1, 11):
-        (v, r, e) = FeasibleTriplet(i, 100)
-        print(2*(r - e))
+    start = time.time_ns()
+    (v, r, e) = FeasibleTriplet(2, 100)
+    end = time.time_ns()
+    print(2*e/(1 + e))
+    print(f"Runtime: {(end - start) / 1000000}")
 
 
 # Python is so annoying sometimes
