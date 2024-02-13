@@ -13,7 +13,7 @@ using Eigen::ArrayXd;
 using std::cout;
 using std::endl;
 
-#define length 5
+#define length 4
 #define string_count 3
 #define alphabet_size 3
 #define NUM_THREADS 1
@@ -22,16 +22,16 @@ using std::endl;
 
 const bool PRINT_EVERY_ITER = true;
 
-const uint64_t powminus0 = pow(alphabet_size, string_count *length);
-const uint64_t powminus1 = pow(alphabet_size, string_count *length - 1);
-const uint64_t powminus2 = pow(alphabet_size, string_count *length - 2);
-const uint64_t powminus3 = pow(alphabet_size, string_count *length - 3);
+const uint64_t powminus0 = pow(alphabet_size, string_count * length);
+const uint64_t powminus1 = pow(alphabet_size, string_count * length - 1);
+const uint64_t powminus2 = pow(alphabet_size, string_count * length - 2);
+const uint64_t powminus3 = pow(alphabet_size, string_count * length - 3);
 
-const uint64_t F_b_equals_1 = alphabet_size * (alphabet_size + 1) * pow(alphabet_size, string_count *(length - 1));
+const uint64_t F_b_equals_1 = alphabet_size * (alphabet_size + 1) * pow(alphabet_size, string_count * (length - 1));
 const std::string base_digits = "0123456789ABCDEF"; // Digits in base 1-16. Add more digits if attempting to run for alphabet_size > 16
 
 template <typename Derived>
-void printArray(const Eigen::ArrayBase<Derived> &arr)
+void printArray(const Eigen::ArrayBase<Derived>& arr)
 {
     for (int i = 0; i < arr.size(); i++)
     {
@@ -45,16 +45,16 @@ void printArray(const Eigen::ArrayBase<Derived> &arr)
     So instead we break that calculation up across threads.
     Additionally, E = std::max(0.0, (vNew + 2 * R - F_withR).maxCoeff()). We can use
     this function for that as well, and just move the constant d*R to outside this function */
-double subtract_and_find_max_parallel(const ArrayXd &v1, const ArrayXd &v2)
+double subtract_and_find_max_parallel(const ArrayXd& v1, const ArrayXd& v2)
 {
     std::future<double> maxVals[NUM_THREADS];
     const uint64_t incr = powminus1 / NUM_THREADS;
 
     // Function to calculate the maximum coefficient in a particular (start...end) slice
     auto findMax = [&v1, &v2](uint64_t start, uint64_t end)
-    {
-        return (v2(Eigen::seq(start, end - 1)) - v1(Eigen::seq(start, end - 1))).maxCoeff();
-    };
+        {
+            return (v2(Eigen::seq(start, end - 1)) - v1(Eigen::seq(start, end - 1))).maxCoeff();
+        };
 
     // Set threads to calculate the max coef in their own smaller slices
     for (int i = 0; i < NUM_THREADS; i++)
@@ -75,76 +75,24 @@ double subtract_and_find_max_parallel(const ArrayXd &v1, const ArrayXd &v2)
     return R;
 }
 
-double Fz(int z, const ArrayXd[] & v, int index)
-{
-    std::string indices = new std::string[d];
-    for (int i = 0; i < d; i++)
-    {
-        indices[i].reserve(length);
-    }
-
-    intToStrings(index, indices);
-
-    int allZ = 0;
-    bool NzPos = new bool[d];
-    for (int i = 0; i < d; i++)
-    {
-        bool zDigit = indices[i][0] != base_digits[z];
-        allZ += zDigit; // Adds 1 if digit is not the same
-        NzPos[i] = zDigit;
-    }
-
-    if (allZ == d) // All digits are the same, no variation occurs
-    {
-        return 0;
-    }
-
-    // 1 / sigma^allZ * variate
-    return pow(alphabet_size, -allZ) * variate(v[allZ], indices, string_count - allZ, NzPos);
-}
-
-void intToStrings(int index, std::string[] & ret)
-{
-    for (int i = string_count * length - 1; i >= 0; i--)
-    {
-        // Order of strings in ret doesn't matter
-        ret[i % string_count][length - i / string_count - 1] = base_digits[index % alphabet_size];
-        index /= alphabet_size;
-    }
-}
-
-double variate(const ArrayXd &v, std::string[] & variating, int numNz, bool[] & variationPos)
-{
-   double output = 0.0;
-
-    // Iterates through every combination of digits for the numNz count of strings that need to be variated
-    for (int varExp = 0; varExp < pow(alphabet_size, numNz); varExp++)
-    {
-        for (int posIndex = 0; posIndex < numNz; posIndex++)
-        {
-            output += v[stringsToInt(variating, variationPos, varExp)];
-        }
-    }
-
-    return output;
-}
-
-int stringsToInt(std::string[] & initial, bool[] &shouldVariate, int variateValue) {
+int stringsToInt(std::string initial[], bool shouldVariate[], int variateValue) {
     int output = 0;
 
     for (int l = 0; l < length; l++) {
-        for(int d = 0; d < string_count; d++) {
+        for (int d = 0; d < string_count; d++) {
             // TODO: Would likely be much more efficient to use contiguous representation (since actual characters don't matter)
             //, and then subtract '0' or something like that
-            if(shouldVariate[d]) {
-                if(l == length - 1) { //At the end of the string, apply the variateValue
+            if (shouldVariate[d]) {
+                if (l == length - 1) { //At the end of the string, apply the variateValue
                     //Order doesn't matter since the order is consistent, and variateValue will take on every possible variation
                     output += base_digits.find(variateValue % alphabet_size);
                     variateValue /= alphabet_size;
-                } else { //If not at the end of the string, shift characters left one space (str[0] is removed)
-                    output += base_digits.find(initial[d][l + 1])
                 }
-            } else {
+                else { //If not at the end of the string, shift characters left one space (str[0] is removed)
+                    output += base_digits.find(initial[d][l + 1]);
+                }
+            }
+            else {
                 output += base_digits.find(initial[d][l]);
             }
 
@@ -155,8 +103,63 @@ int stringsToInt(std::string[] & initial, bool[] &shouldVariate, int variateValu
     return output;
 }
 
+double variate(const ArrayXd& v, std::string variating[], int numNz, bool variationPos[])
+{
+    double output = 0.0;
+
+    // Iterates through every combination of digits for the numNz count of strings that need to be variated
+    for (int varExp = 0; varExp < pow(alphabet_size, numNz); varExp++)
+    {
+        for (int posIndex = 0; posIndex < numNz; posIndex++)
+        {
+            cout << stringsToInt(variating, variationPos, varExp) << endl;
+            output += v[stringsToInt(variating, variationPos, varExp)];
+        }
+    }
+
+    return output;
+}
+
+void intToStrings(int index, std::string ret[])
+{
+    for (int i = string_count * length - 1; i >= 0; i--)
+    {
+        // Order of strings in ret doesn't matter, adds characters from end to front
+        ret[i % string_count][i / string_count] = base_digits[index % alphabet_size];
+        index /= alphabet_size;
+    }
+}
+
+double Fz(int z, const ArrayXd v[], int index)
+{
+    std::string indices[string_count];
+    for (int i = 0; i < string_count; i++)
+    {
+        indices[i].insert(0, length, ' ');
+    }
+
+    intToStrings(index, indices);
+
+    int allZ = 0;
+    bool NzPos[string_count]{};
+    for (int i = 0; i < string_count; i++)
+    {
+        bool zDigit = indices[i][0] != base_digits[z];
+        allZ += zDigit; // Adds 1 if digit is not the same
+        NzPos[i] = zDigit;
+    }
+
+    if (allZ == string_count) // All digits are the same, no variation occurs
+    {
+        return 0;
+    }
+
+    // 1 / sigma^allZ * variate
+    return pow(alphabet_size, -allZ) * variate(v[allZ], indices, string_count - allZ, NzPos);
+}
+
 // (remember: any changes made in here have to be made in F_withplusR as well)
-void F(const ArrayXd[] & v, ArrayXd &ret)
+void F(const ArrayXd v[], ArrayXd& ret)
 {
     // Computes F, does their elementwise maximum, and places it into second half of ret
     auto start2 = std::chrono::system_clock::now();
@@ -175,17 +178,17 @@ void F(const ArrayXd[] & v, ArrayXd &ret)
             ret[index] += 1;
         }
     }
-    end2 = std::chrono::system_clock::now();
-    elapsed_seconds = end2 - start2;
+    auto end2 = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = end2 - start2;
     cout << "Elapsed time F (s): " << elapsed_seconds.count() << endl;
 }
 
 // TODO: I have no clue what optimizations this did originally, but it is worth checking if that or a variation on that works here
-void F_withplusR(const double R, const ArrayXd &v2, ArrayXd &ret)
+void F_withplusR(const double R, const ArrayXd& v2, ArrayXd& ret)
 {
-    ArrayXd vR = new ArrayXd[d];
+    ArrayXd vR[string_count];
 
-    for (int i = 0; i < d; i++)
+    for (int i = 0; i < string_count; i++)
     {
         vR[i] = v2 + (string_count - i - 1) * R;
     }
@@ -196,14 +199,14 @@ void F_withplusR(const double R, const ArrayXd &v2, ArrayXd &ret)
 void FeasibleTriplet(int n, int d, int sigma)
 {
     auto start = std::chrono::system_clock::now();
-    ArrayXd v = new ArrayXd[d]; // Vector of previous results, initialized to 0
+    ArrayXd v[string_count]; // Vector of previous results, initialized to 0
 
     for (int i = 0; i < d; i++)
     {
         v[i] = ArrayXd::Zero(powminus1); // we pass a pointer to this, and have it get filled in
     }
 
-    ArryXd vNew(powminus1);
+    ArrayXd vNew(powminus1);
 
     double r = 0;
     double e = 0;
@@ -218,8 +221,8 @@ void FeasibleTriplet(int n, int d, int sigma)
         if (i % CALC_EVERY_X_ITERATIONS == 0 || i == n)
         {
             start2 = std::chrono::system_clock::now();
-            const double R = subtract_and_find_max_parallel(v[d - 1], v2);
-            printArray(v2);
+            const double R = subtract_and_find_max_parallel(v[d - 1], vNew);
+            printArray(vNew);
             end = std::chrono::system_clock::now();
             elapsed_seconds = end - start2;
             cout << "Elapsed time (s) mc1: " << elapsed_seconds.count() << endl;
@@ -263,10 +266,9 @@ void FeasibleTriplet(int n, int d, int sigma)
 
             // cout << r << " " << R << endl;
         }
-    // Update v to contain vNew
-    std:
-        swap(v[0], vNew) // Replaces junk value in v[0] with vNew
-            for (int i = 0; i < d - 1; i++)
+        // Update v to contain vNew
+        std::swap(v[0], vNew); // Replaces junk value in v[0] with vNew
+        for (int i = 0; i < d - 1; i++)
         { // Shifts vNew to the end of v while moving other vectors up one position in array
             std::swap(v[i], v[i + 1]);
         }
