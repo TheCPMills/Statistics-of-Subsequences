@@ -112,7 +112,10 @@ double variate(const ArrayXd& v, std::string variating[], int numNz, bool variat
     {
         for (int posIndex = 0; posIndex < numNz; posIndex++)
         {
-            cout << stringsToInt(variating, variationPos, varExp) << endl;
+            if (stringsToInt(variating, variationPos, varExp) > v.size()) {
+                std::cout << stringsToInt(variating, variationPos, varExp) << endl;
+            }
+            //TODO!!: Gives error, may be because stringsToInt is not bounded to left half of array
             output += v[stringsToInt(variating, variationPos, varExp)];
         }
     }
@@ -196,12 +199,12 @@ void F_withplusR(const double R, const ArrayXd& v2, ArrayXd& ret)
     F(vR, ret);
 }
 
-void FeasibleTriplet(int n, int d, int sigma)
+void FeasibleTriplet(int n)
 {
     auto start = std::chrono::system_clock::now();
     ArrayXd v[string_count]; // Vector of previous results, initialized to 0
 
-    for (int i = 0; i < d; i++)
+    for (int i = 0; i < string_count; i++)
     {
         v[i] = ArrayXd::Zero(powminus1); // we pass a pointer to this, and have it get filled in
     }
@@ -210,7 +213,7 @@ void FeasibleTriplet(int n, int d, int sigma)
 
     double r = 0;
     double e = 0;
-    for (int i = d; i < n + 1; i++)
+    for (int i = string_count; i < n + 1; i++)
     {
         // Writes new vector (v2) into v2
         auto start2 = std::chrono::system_clock::now();
@@ -221,7 +224,7 @@ void FeasibleTriplet(int n, int d, int sigma)
         if (i % CALC_EVERY_X_ITERATIONS == 0 || i == n)
         {
             start2 = std::chrono::system_clock::now();
-            const double R = subtract_and_find_max_parallel(v[d - 1], vNew);
+            const double R = subtract_and_find_max_parallel(v[string_count - 1], vNew);
             printArray(vNew);
             end = std::chrono::system_clock::now();
             elapsed_seconds = end - start2;
@@ -236,7 +239,7 @@ void FeasibleTriplet(int n, int d, int sigma)
             cout << "Elapsed time FpR (s): " << elapsed_seconds.count() << endl;
 
             start2 = std::chrono::system_clock::now();
-            const double E = std::max(subtract_and_find_max_parallel(v[0], vNew) + d * R, 0.0);
+            const double E = std::max(subtract_and_find_max_parallel(v[0], vNew) + string_count * R, 0.0);
             end = std::chrono::system_clock::now();
             elapsed_seconds = end - start2;
             cout << "Elapsed time mc2 (s): " << elapsed_seconds.count() << endl;
@@ -268,7 +271,7 @@ void FeasibleTriplet(int n, int d, int sigma)
         }
         // Update v to contain vNew
         std::swap(v[0], vNew); // Replaces junk value in v[0] with vNew
-        for (int i = 0; i < d - 1; i++)
+        for (int i = 0; i < string_count - 1; i++)
         { // Shifts vNew to the end of v while moving other vectors up one position in array
             std::swap(v[i], v[i + 1]);
         }
@@ -282,7 +285,7 @@ int main()
 {
     cout << "Starting with l = " << length << ", d = " << string_count << ", sigma = " << alphabet_size << "..." << endl;
     auto start = std::chrono::system_clock::now();
-    FeasibleTriplet(length, string_count, alphabet_size);
+    FeasibleTriplet(100);
     auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;
     cout << "Elapsed time (s): " << elapsed_seconds.count() << endl;
