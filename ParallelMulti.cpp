@@ -115,8 +115,9 @@ double variate(const ArrayXd& v, std::string variating[], int numNz, bool variat
             if (stringsToInt(variating, variationPos, varExp) > v.size()) {
                 std::cout << stringsToInt(variating, variationPos, varExp) << endl;
             }
-            //TODO!!: Gives error, may be because stringsToInt is not bounded to left half of array
-            output += v[stringsToInt(variating, variationPos, varExp)];
+
+            uint64_t index = stringsToInt(variating, variationPos, varExp);
+            output += v[std::min(index, powminus0 - index)];
         }
     }
 
