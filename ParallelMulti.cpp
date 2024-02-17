@@ -1,4 +1,4 @@
-#define EIGEN_NO_DEBUG 1
+// define EIGEN_NO_DEBUG 1
 
 #include <Eigen/Dense>
 #include <bitset>
@@ -112,10 +112,6 @@ double variate(const ArrayXd& v, std::string variating[], int numNz, bool variat
     {
         for (int posIndex = 0; posIndex < numNz; posIndex++)
         {
-            if (stringsToInt(variating, variationPos, varExp) > v.size()) {
-                std::cout << stringsToInt(variating, variationPos, varExp) << endl;
-            }
-
             uint64_t index = stringsToInt(variating, variationPos, varExp);
             output += v[std::min(index, powminus0 - index)];
         }
