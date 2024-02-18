@@ -13,9 +13,9 @@ using Eigen::ArrayXd;
 using std::cout;
 using std::endl;
 
-#define length 4
-#define string_count 3
-#define alphabet_size 3
+#define length 3
+#define string_count 2
+#define alphabet_size 2
 #define NUM_THREADS 1
 // Careful: ensure that NUM_THREADS divides alphabet_size^(string_count*length-1)
 #define CALC_EVERY_X_ITERATIONS 1
@@ -143,7 +143,7 @@ double Fz(int z, const ArrayXd v[], int index)
     intToStrings(index, indices);
 
     int numNz = 0;
-    bool NzPos[string_count]{};
+    bool NzPos[string_count];
     for (int i = 0; i < string_count; i++)
     {
         bool zDigit = indices[i][0] != base_digits[z];
@@ -156,7 +156,7 @@ double Fz(int z, const ArrayXd v[], int index)
         return 0;
     }
 
-    return pow(alphabet_size, -numNz) * variate(v[numNz - 1], indices, numNz, NzPos);
+    return pow(alphabet_size, -numNz) * variate(v[string_count - numNz], indices, numNz, NzPos);
 }
 
 // (remember: any changes made in here have to be made in F_withplusR as well)
@@ -184,6 +184,7 @@ void F(const ArrayXd v[], ArrayXd& ret)
 
         ret[index] = calculated;
     }
+    
     auto end2 = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end2 - start2;
     cout << "Elapsed time F (s): " << elapsed_seconds.count() << endl;
@@ -197,7 +198,8 @@ void F_withplusR(const double R, const ArrayXd& vNew, ArrayXd& ret)
 
     for (int i = 0; i < string_count; i++)
     {
-        vR[i] = vNew + (string_count - i - 1) * R;
+        // Order gets reversed within Fz
+        vR[i] = vNew + i * R;
     }
 
     F(vR, ret);
