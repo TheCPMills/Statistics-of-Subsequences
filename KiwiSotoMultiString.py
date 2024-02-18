@@ -29,7 +29,7 @@ def FeasibleTriplet(length, sigma, d, iters):
 # note: b is 1 where all v start with the same character and 0 otherwise
 def F(v, sigma, d, length):
     b = np.zeros(sigma ** (d * length))
-    for i in range(0, sigma ** d + 1, sigma * (sigma + 1) + 1):
+    for i in range(0, sigma ** d, int((1 - sigma ** d) / (1 - sigma))):
         b[i * sigma ** (d * (length - 1)):(i + 1) * sigma ** (d * (length - 1))] = 1
 
     Fz = [F_z(z, v, sigma, d, length) for z in range(sigma)]
@@ -78,8 +78,8 @@ def variate(Nz, strings, v, sigma, length):
 
 
 def main():
-    sigma = 3
-    d = 3
+    sigma = 2
+    d = 2
     l = 4
     iters = 100
     start = time.time_ns()
