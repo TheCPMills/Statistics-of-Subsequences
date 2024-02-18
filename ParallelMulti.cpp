@@ -27,7 +27,10 @@ const uint64_t powminus1 = pow(alphabet_size, string_count * length - 1);
 const uint64_t powminus2 = pow(alphabet_size, string_count * length - 2);
 const uint64_t powminus3 = pow(alphabet_size, string_count * length - 3);
 
-const uint64_t F_b_equals_1 = alphabet_size * (alphabet_size + 1) * pow(alphabet_size, string_count * (length - 1));
+// F_b_step is the number of strings that start with a specific character (e.g., all triplets of strings starting with 1, 1, 0)
+const uint64_t F_b_step = pow(alphabet_size, string_count * (length - 1));
+// F_b_equals_1 is the number of starting character combinations between (0, 0, ...) and (1, 1, ...), which is the same length for any (x, x, ...) and (x + 1, x + 1, ...)
+const uint64_t F_b_equals_1 = ((1 - pow(alphabet_size, string_count)) / (1 - alphabet_size));
 const std::string base_digits = "0123456789"; // Digits in base 1-16. Add more digits if attempting to run for alphabet_size > 16
 
 template <typename Derived>
@@ -203,7 +206,8 @@ void F(const ArrayXd v[], ArrayXd& ret)
         {
             calculated = std::max(Fz(s, v, index), calculated);
         }
-        if (index % F_b_equals_1 == 0)
+        // TODO: It is possible to change the outer for loop
+        if ((index / F_b_step) % F_b_equals_1 == 0)
         {
             calculated += 1;
         }
@@ -217,13 +221,13 @@ void F(const ArrayXd v[], ArrayXd& ret)
 
 // TODO: Original optimization doesn't work, but could make a duplicate F function/subfunctions that manually adds the (d - i - 1) * R
 // to avoid allocating an additional d vectors
-void F_withplusR(const double R, const ArrayXd& v2, ArrayXd& ret)
+void F_withplusR(const double R, const ArrayXd& vNew, ArrayXd& ret)
 {
     ArrayXd vR[string_count];
 
     for (int i = 0; i < string_count; i++)
     {
-        vR[i] = v2 + (string_count - i - 1) * R;
+        vR[i] = vNew + (string_count - i - 1) * R;
     }
 
     F(vR, ret);
@@ -264,12 +268,13 @@ void FeasibleTriplet(int n)
         //  its memory for other computations.
         start2 = std::chrono::system_clock::now();
         F_withplusR(R, vNew, v[0]);
+        //printArray(v[0]);
         end = std::chrono::system_clock::now();
         elapsed_seconds = end - start2;
         cout << "Elapsed time FpR (s): " << elapsed_seconds.count() << endl;
 
         start2 = std::chrono::system_clock::now();
-        const double E = std::max(find_max_parallel(vNew), 0.0);
+        const double E = std::max(find_max_parallel(v[0]), 0.0);
         end = std::chrono::system_clock::now();
         elapsed_seconds = end - start2;
         cout << "Elapsed time mc2 (s): " << elapsed_seconds.count() << endl;
