@@ -78,36 +78,6 @@ double subtract_and_find_max_parallel(const ArrayXd& v1, const ArrayXd& v2)
     return R;
 }
 
-double find_max_parallel(const ArrayXd& v)
-{
-    std::future<double> maxVals[NUM_THREADS];
-    const uint64_t incr = powminus1 / NUM_THREADS;
-
-    // Function to calculate the maximum coefficient in a particular (start...end) slice
-    auto findMax = [&v](uint64_t start, uint64_t end)
-        {
-            return v(Eigen::seq(start, end - 1)).maxCoeff();
-        };
-
-    // Set threads to calculate the max coef in their own smaller slices
-    for (int i = 0; i < NUM_THREADS; i++)
-    {
-        maxVals[i] = std::async(std::launch::async, findMax, incr * i, incr * (i + 1));
-    }
-
-    // Now calculate the global max
-    double R = maxVals[0].get(); // .get() waits until the thread completes
-    for (int i = 1; i < NUM_THREADS; i++)
-    {
-        double coef = maxVals[i].get();
-        if (coef > R)
-        {
-            R = coef;
-        }
-    }
-    return R;
-}
-
 // Basically variate
 int stringsToInt(std::string initial[], bool shouldVariate[], int variateValue) {
     int output = 0;
@@ -274,7 +244,7 @@ void FeasibleTriplet(int n)
         cout << "Elapsed time FpR (s): " << elapsed_seconds.count() << endl;
 
         start2 = std::chrono::system_clock::now();
-        const double E = std::max(find_max_parallel(v[0]), 0.0);
+        const double E = std::max(subtract_and_find_max_parallel(v[0], vNew) + string_count * R, 0.0);
         end = std::chrono::system_clock::now();
         elapsed_seconds = end - start2;
         cout << "Elapsed time mc2 (s): " << elapsed_seconds.count() << endl;
