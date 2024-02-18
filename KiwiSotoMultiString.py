@@ -20,6 +20,7 @@ def FeasibleTriplet(length, sigma, d, iters):
 
         if R - E >= r - e:
             (u, r, e) = (v[-1], R, E)
+        print(f"Iteration {i - d + 1}: R = {R}, E = {E}, r = {r}, e = {e}, constant = {d * (r - e)}")
         del v[0]
 
     return u, r, e
@@ -77,9 +78,9 @@ def variate(Nz, strings, v, sigma, length):
 
 
 def main():
-    sigma = 2
+    sigma = 3
     d = 3
-    l = 7
+    l = 4
     iters = 100
     start = time.time_ns()
     (v, r, e) = FeasibleTriplet(l, sigma, d, iters)
