@@ -18,7 +18,12 @@ using std::endl;
 #define alphabet_size 3
 #define NUM_THREADS 4
 
+/* Calculate the lower bound only every X iterations. A higher number makes the program run much faster, with the caveat
+ * that it may take more total iterations*/
 #define CALC_EVERY_X_ITERATIONS 4
+
+/* Tolerance to quit at if the new r-e value is not at least this much larger than the previously calculated r-e
+ * value.*/
 #define TOLERANCE 0.000000005
 
 const bool PRINT_EVERY_ITER = true;
