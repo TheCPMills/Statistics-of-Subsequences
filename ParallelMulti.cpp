@@ -56,7 +56,6 @@ double secondsSince(std::chrono::system_clock::time_point startTime) {
     this function for that as well, and just move the constant d*R to outside this function */
 double subtract_and_find_max_parallel(const ArrayXd& v1, const ArrayXd& v2) {
     std::future<double> maxVals[NUM_THREADS];
-    const uint64_t incr = powminus0 / NUM_THREADS;
 
     // Function to calculate the maximum coefficient in a particular (start...end) slice
     auto findMax = [&v1, &v2](uint64_t start, uint64_t end) {
@@ -203,37 +202,38 @@ void FeasibleTriplet(int n) {
         v[i] = ArrayXd::Zero(powminus0);  // we pass a pointer to this, and have it get filled in
     }
 
-    ArrayXd vNew(powminus0);
+    ArrayXd vNew(powminus0);  // F will write new vector into this
 
     double r = 0;
     double e = 0;
     for (int i = string_count; i < n + 1; i++) {
         cout << "ITERATION " << i - string_count + 1 << endl;
-        // Writes new vector (v2) into v2
         auto start2 = std::chrono::system_clock::now();
         F(v, vNew);
         cout << "Elapsed time F (s): " << secondsSince(start2) << endl;
 
-        start2 = std::chrono::system_clock::now();
-        const double R = subtract_and_find_max_parallel(v[string_count - 1], vNew);
-        cout << "Elapsed time (s) mc1: " << secondsSince(start2) << endl;
+        if (i % CALC_EVERY_X_ITERATIONS == 0 || i == n) {
+            start2 = std::chrono::system_clock::now();
+            const double R = subtract_and_find_max_parallel(v[string_count - 1], vNew);
+            cout << "Elapsed time (s) mc1: " << secondsSince(start2) << endl;
 
-        //  Beyond this point, v[0]'s values are no longer needed, so we reuse
-        //  its memory for other computations.
-        start2 = std::chrono::system_clock::now();
-        F_withplusR(R, vNew, v[0]);
-        cout << "Elapsed time FpR (s): " << secondsSince(start2) << endl;
+            //  Beyond this point, v[0]'s values are no longer needed, so we reuse
+            //  its memory for other computations.
+            start2 = std::chrono::system_clock::now();
+            F_withplusR(R, vNew, v[0]);
+            cout << "Elapsed time FpR (s): " << secondsSince(start2) << endl;
 
-        start2 = std::chrono::system_clock::now();
-        const double E = std::max(subtract_and_find_max_parallel(v[0], vNew) + string_count * R, 0.0);
-        cout << "Elapsed time mc2 (s): " << secondsSince(start2) << endl;
+            start2 = std::chrono::system_clock::now();
+            const double E = std::max(subtract_and_find_max_parallel(v[0], vNew) + string_count * R, 0.0);
+            cout << "Elapsed time mc2 (s): " << secondsSince(start2) << endl;
 
-        if (R - E >= r - e) {
-            r = R;
-            e = E;
+            if (R - E >= r - e) {
+                r = R;
+                e = E;
+            }
+            cout << "Result (iteration " << i - string_count + 1 << "): " << string_count * (r - e) << endl;
+            cout << "Calculated R-E: R = " << R << ", E = " << E << endl;
         }
-        cout << "Result (iteration " << i - string_count + 1 << "): " << string_count * (r - e) << endl;
-        cout << "Calculated R-E: R = " << R << ", E = " << E << endl;
 
         // Update v to contain vNew
         std::swap(v[0], vNew);  // Replaces junk value in v[0] with vNew
