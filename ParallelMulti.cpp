@@ -14,9 +14,9 @@ using std::cout;
 using std::endl;
 
 #define length 4
-#define string_count 3
+#define string_count 2
 #define alphabet_size 3
-#define NUM_THREADS 1
+#define NUM_THREADS 5
 // Careful: ensure that NUM_THREADS divides alphabet_size^(string_count*length-1)
 #define CALC_EVERY_X_ITERATIONS 1
 
@@ -56,7 +56,7 @@ double secondsSince(std::chrono::system_clock::time_point startTime) {
     this function for that as well, and just move the constant d*R to outside this function */
 double subtract_and_find_max_parallel(const ArrayXd& v1, const ArrayXd& v2) {
     std::future<double> maxVals[NUM_THREADS];
-    const uint64_t incr = powminus1 / NUM_THREADS;
+    const uint64_t incr = powminus0 / NUM_THREADS;
 
     // Function to calculate the maximum coefficient in a particular (start...end) slice
     auto findMax = [&v1, &v2](uint64_t start, uint64_t end) {
@@ -64,8 +64,11 @@ double subtract_and_find_max_parallel(const ArrayXd& v1, const ArrayXd& v2) {
     };
 
     // Set threads to calculate the max coef in their own smaller slices
+    uint64_t prev_total = 0;
     for (int i = 0; i < NUM_THREADS; i++) {
-        maxVals[i] = std::async(std::launch::async, findMax, incr * i, incr * (i + 1));
+        uint64_t total = ceil((i + 1) * double(powminus0) / NUM_THREADS);
+        maxVals[i] = std::async(std::launch::async, findMax, prev_total, total);
+        prev_total = total;
     }
 
     // Now calculate the global max
@@ -248,7 +251,7 @@ int main() {
     cout << "Starting with l = " << length << ", d = " << string_count << ", sigma = " << alphabet_size << "..."
          << endl;
     auto start = std::chrono::system_clock::now();
-    FeasibleTriplet(100);
+    FeasibleTriplet(3);
     cout << "Elapsed time (s): " << secondsSince(start) << endl;
 
     return 0;
