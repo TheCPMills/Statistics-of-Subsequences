@@ -14,11 +14,12 @@ using std::cout;
 using std::endl;
 
 #define length 4
-#define string_count 2
+#define string_count 3
 #define alphabet_size 3
-#define NUM_THREADS 5
-// Careful: ensure that NUM_THREADS divides alphabet_size^(string_count*length-1)
-#define CALC_EVERY_X_ITERATIONS 1
+#define NUM_THREADS 4
+
+#define CALC_EVERY_X_ITERATIONS 4
+#define TOLERANCE 0.000000005
 
 const bool PRINT_EVERY_ITER = true;
 
@@ -155,27 +156,42 @@ double Fz(int z, const ArrayXd v[], int index) {
     return pow(alphabet_size, -numNz) * variate(v[string_count - numNz], indices, numNz, NzPos);
 }
 
-// (remember: any changes made in here have to be made in F_withplusR as well)
 void F(const ArrayXd v[], ArrayXd& ret) {
-    // Computes F, does their elementwise maximum, and places it into second half of ret
     auto start2 = std::chrono::system_clock::now();
 
-    // TODO: It may be more efficient to keep index as a collection of strings and define an increment method instead of
-    // constantly converting to a string. At the very least, it is definitely more efficient to define the memory for
-    // the strings externally instead of reallocating every time This would also greatly reduce the risk of the index
-    // overflowing
-    double calculated;
-    for (int index = 0; index < powminus0; index++) {
-        calculated = 0.0;
-        for (int s = 0; s < alphabet_size; s++) {
-            calculated = std::max(Fz(s, v, index), calculated);
-        }
-        // TODO: It is possible to change the outer for loop
-        if ((index / F_b_step) % F_b_equals_1 == 0) {
-            calculated += 1;
-        }
+    auto F_lambda = [&v, &ret](int start, int end) {
+        // TODO: It may be more efficient to keep index as a collection of strings and define an increment method
+        // instead of constantly converting to a string. At the very least, it is definitely more efficient to define
+        // the memory for the strings externally instead of reallocating every time This would also greatly reduce the
+        // risk of the index overflowing
+        // TODO: also probably change things to uint64_t
+        double calculated;
+        for (int index = start; index < end; index++) {
+            calculated = 0.0;
+            for (int s = 0; s < alphabet_size; s++) {
+                calculated = std::max(Fz(s, v, index), calculated);
+            }
+            // TODO: It is possible to change the outer for loop
+            if ((index / F_b_step) % F_b_equals_1 == 0) {
+                calculated += 1;
+            }
 
-        ret[index] = calculated;
+            ret[index] = calculated;
+        }
+    };
+
+    std::thread threads[NUM_THREADS];
+    // Set threads to run F in their own smaller slices
+    int prev_total = 0;
+    for (int i = 0; i < NUM_THREADS; i++) {
+        int total = ceil((i + 1) * double(powminus0) / NUM_THREADS);
+        threads[i] = std::thread(F_lambda, prev_total, total);
+        prev_total = total;
+    }
+
+    // Now wait for each thread to finish
+    for (int i = 0; i < NUM_THREADS; i++) {
+        threads[i].join();
     }
 
     cout << "Elapsed time F (s): " << secondsSince(start2) << endl;
@@ -188,7 +204,7 @@ void F_withplusR(const double R, const ArrayXd& vNew, ArrayXd& ret) {
 
     for (int i = 0; i < string_count; i++) {
         // Order gets reversed within Fz
-        vR[i] = vNew + i * R;
+        vR[i] = vNew + i * R;  // technically these additions should be paralelized
     }
 
     F(vR, ret);
@@ -206,6 +222,8 @@ void FeasibleTriplet(int n) {
 
     double r = 0;
     double e = 0;
+    double prevr = 0;
+    double preve = 0;
     for (int i = string_count; i < n + 1; i++) {
         cout << "ITERATION " << i - string_count + 1 << endl;
         auto start2 = std::chrono::system_clock::now();
@@ -231,8 +249,14 @@ void FeasibleTriplet(int n) {
                 r = R;
                 e = E;
             }
-            cout << "Result (iteration " << i - string_count + 1 << "): " << string_count * (r - e) << endl;
+            printf("Result (iteration %d): %.9f\n", i - string_count + 1, string_count * (r - e));
             cout << "Calculated R-E: R = " << R << ", E = " << E << endl;
+            if ((r - e) - (prevr - preve) <= TOLERANCE && e != 0) {
+                printf("Change under min tolerance, quitting...\n");
+                break;
+            }
+            prevr = r;
+            preve = e;
         }
 
         // Update v to contain vNew
@@ -244,14 +268,13 @@ void FeasibleTriplet(int n) {
     }
 
     // return u, r, e
-    cout << "Result: " << string_count * (r - e) << endl;
+    printf("Final Result: %.9f\n", string_count * (r - e));
 }
 
 int main() {
-    cout << "Starting with l = " << length << ", d = " << string_count << ", sigma = " << alphabet_size << "..."
-         << endl;
+    printf("Starting with l = %d, d = %d, sigma = %d...\n", length, string_count, alphabet_size);
     auto start = std::chrono::system_clock::now();
-    FeasibleTriplet(3);
+    FeasibleTriplet(100);
     cout << "Elapsed time (s): " << secondsSince(start) << endl;
 
     return 0;
