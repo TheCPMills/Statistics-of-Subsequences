@@ -13,14 +13,14 @@ using Eigen::ArrayXd;
 using std::cout;
 using std::endl;
 
-#define length 4
-#define string_count 3
-#define alphabet_size 3
+#define length 1
+#define string_count 2
+#define alphabet_size 4
 #define NUM_THREADS 4
 
 /* Calculate the lower bound only every X iterations. A higher number makes the program run much faster, with the caveat
  * that it may take more total iterations*/
-#define CALC_EVERY_X_ITERATIONS 4
+#define CALC_EVERY_X_ITERATIONS 1
 
 /* Tolerance to quit at if the new r-e value is not at least this much larger than the previously calculated r-e
  * value.*/
@@ -256,7 +256,7 @@ void FeasibleTriplet(int n) {
             }
             printf("Result (iteration %d): %.9f\n", i - string_count + 1, string_count * (r - e));
             cout << "Calculated R-E: R = " << R << ", E = " << E << endl;
-            if ((r - e) - (prevr - preve) <= TOLERANCE && e != 0) {
+            if ((r - e) - (prevr - preve) <= TOLERANCE && (prevr != r && preve != e)) {
                 printf("Change under min tolerance, quitting...\n");
                 break;
             }
