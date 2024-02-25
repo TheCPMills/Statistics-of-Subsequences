@@ -14,13 +14,13 @@ using std::cout;
 using std::endl;
 
 #define length 1
-#define string_count 2
-#define alphabet_size 4
-#define NUM_THREADS 4
+#define string_count 12
+#define alphabet_size 2
+#define NUM_THREADS 8
 
 /* Calculate the lower bound only every X iterations. A higher number makes the program run much faster, with the caveat
  * that it may take more total iterations*/
-#define CALC_EVERY_X_ITERATIONS 1
+#define CALC_EVERY_X_ITERATIONS 10
 
 /* Tolerance to quit at if the new r-e value is not at least this much larger than the previously calculated r-e
  * value.*/
@@ -44,7 +44,7 @@ const std::string base_digits =
 
 template <typename Derived>
 void printArray(const Eigen::ArrayBase<Derived>& arr) {
-    for (int i = 0; i < arr.size(); i++) {
+    for (uint64_t i = 0; i < arr.size(); i++) {
         cout << arr[i] << " ";
     }
     cout << endl;
@@ -88,8 +88,8 @@ double subtract_and_find_max_parallel(const ArrayXd& v1, const ArrayXd& v2) {
 }
 
 // Basically variate
-int stringsToInt(std::string initial[], bool shouldVariate[], int variateValue) {
-    int output = 0;
+uint64_t stringsToInt(std::string initial[], bool shouldVariate[], int variateValue) {
+    uint64_t output = 0;
 
     for (int l = 0; l < length; l++) {
         for (int d = 0; d < string_count; d++) {
@@ -121,7 +121,7 @@ double variate(const ArrayXd& v, std::string variating[], int numNz, bool variat
     double output = 0.0;
 
     // Iterates through every combination of digits for the numNz count of strings that need to be variated
-    for (int varExp = 0; varExp < pow(alphabet_size, numNz); varExp++) {
+    for (uint64_t varExp = 0; varExp < pow(alphabet_size, numNz); varExp++) {
         uint64_t index = stringsToInt(variating, variationPos, varExp);
         output += v[index];
     }
@@ -129,7 +129,7 @@ double variate(const ArrayXd& v, std::string variating[], int numNz, bool variat
     return output;
 }
 
-void intToStrings(int index, std::string ret[]) {
+void intToStrings(uint64_t index, std::string ret[]) {
     for (int i = string_count * length - 1; i >= 0; i--) {
         // Order of strings in ret doesn't matter, adds characters from end to front
         ret[i % string_count][i / string_count] = base_digits[index % alphabet_size];
@@ -137,7 +137,7 @@ void intToStrings(int index, std::string ret[]) {
     }
 }
 
-double Fz(int z, const ArrayXd v[], int index) {
+double Fz(int z, const ArrayXd v[], uint64_t index) {
     std::string indices[string_count];
     for (int i = 0; i < string_count; i++) {
         indices[i].insert(0, length, ' ');
@@ -164,14 +164,14 @@ double Fz(int z, const ArrayXd v[], int index) {
 void F(const ArrayXd v[], ArrayXd& ret) {
     auto start2 = std::chrono::system_clock::now();
 
-    auto F_lambda = [&v, &ret](int start, int end) {
+    auto F_lambda = [&v, &ret](uint64_t start, uint64_t end) {
         // TODO: It may be more efficient to keep index as a collection of strings and define an increment method
         // instead of constantly converting to a string. At the very least, it is definitely more efficient to define
         // the memory for the strings externally instead of reallocating every time This would also greatly reduce the
         // risk of the index overflowing
         // TODO: also probably change things to uint64_t
         double calculated;
-        for (int index = start; index < end; index++) {
+        for (uint64_t index = start; index < end; index++) {
             calculated = 0.0;
             for (int s = 0; s < alphabet_size; s++) {
                 calculated = std::max(Fz(s, v, index), calculated);
@@ -187,9 +187,9 @@ void F(const ArrayXd v[], ArrayXd& ret) {
 
     std::thread threads[NUM_THREADS];
     // Set threads to run F in their own smaller slices
-    int prev_total = 0;
+    uint64_t prev_total = 0;
     for (int i = 0; i < NUM_THREADS; i++) {
-        int total = ceil((i + 1) * double(powminus0) / NUM_THREADS);
+        uint64_t total = ceil((i + 1) * double(powminus0) / NUM_THREADS);
         threads[i] = std::thread(F_lambda, prev_total, total);
         prev_total = total;
     }
@@ -279,7 +279,7 @@ void FeasibleTriplet(int n) {
 int main() {
     printf("Starting with l = %d, d = %d, sigma = %d...\n", length, string_count, alphabet_size);
     auto start = std::chrono::system_clock::now();
-    FeasibleTriplet(100);
+    FeasibleTriplet(1000);
     cout << "Elapsed time (s): " << secondsSince(start) << endl;
 
     return 0;
