@@ -1,7 +1,7 @@
 # Supporting document for Parallel.cpp
 To set your desired parameters, see the USER PARAMETERS section at the top of Parallel.cpp.
 
-**NOTE: Parallel.cpp consumes 2^(2*length -1) * 4 * 2 bytes of memory. If you do not have enough RAM for the length parameter you set, it (being the program or possibly your entire system) will probably crash/run extremely slowly. Always verify you have enough RAM before running!**
+**NOTE: Parallel.cpp consumes 2^(2*length -1) * 4 * 2 = 4^(length+1) bytes of memory. If you do not have enough RAM for the length parameter you set, it (being the program or possibly your entire system) will probably crash/run extremely slowly. Always verify you have enough RAM before running!**
 
 Parallel.cpp does not directly follow the explanation in the paper. Namely, a few optimizations are made so that it runs faster. Note that Parallel.cpp does *not* implement any form of external memory reading/writing. That code is in a separate file. 
 
