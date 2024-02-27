@@ -1,7 +1,15 @@
 # C++ Implementation of the Feasible Triplet Algorithm
 
 This code is an implementation of the Feasible Triplet Algorithm as defined in the paper "Improved Lower Bounds for the Chvátal-Sankoff
-Constants", written by George T. Heineman, Chase Miller, Daniel Reichman, Andrew Salls, Gábor Sárközy, and Duncan Soiffer. For a further explanation of the code, please read this paper.
+Constants", written by George T. Heineman, Chase Miller, Daniel Reichman, Andrew Salls, Gábor Sárközy, and Duncan Soiffer. We include a brief summary below, but for a further explanation of the code, please read this paper.
+
+The Chvatal-Sankoff constants $\gamma_{\sigma, d}$ are a set of constants such that 
+
+$\gamma_{\sigma, d} = \lim\limits_{n \to \infty} \frac{E[LCS_{\sigma, d}]}{n}$
+
+where $LCS_{\sigma, d}$ is the $d$-LCS for $d$ random strings, where each string is of length $n$ and each character in the string is one of $\sigma$ possible characters, chosen with equal chances for each character randomly. Essentially, this constant describes the expected length of the LCS when compared to the original strings as long as the strings are long enough.
+
+The goal of this code is to calculate a lower bound on the constants, since their exact value is currently unknown.
 
 # How to run
 All code necessary should be included in this repository. First, download the repository. Open ParallelMulti.cpp and adjust the parameters at the top of the file. Keep in mind that this algorithm is highly exponential, creating and modifying multiple $alphabet\_size^{string\_count*length}$ vectors of doubles. Be careful not to set alphabet_size, string_count, or length too large.
@@ -33,9 +41,9 @@ $(a_1b_1\dots \sigma_1)(a_2b_2\dots \sigma_2)\dots(a_lb_l\dots \sigma_l)$
 Finally, this number is converted into a base-10 number that can be stored in C++. The resulting integer is the index that is associated with the strings $a, b, \dots, \sigma$.
 
 ## F_b_step, F_b_equals_1, and b
-One important part of the algorithm is the $b$ vector. For every index in $b$, $b$ has a value of 1 if the strings associated with that index all start with the same character, and 0 otherwise.
+One important part of the Feasible Triplet algorithm is the $b$ vector. For every index in $b$, $b$ has a value of 1 if the strings associated with that index all start with the same character, and 0 otherwise.
 
-Under the ordering we defined, the characters that all start with the same characters are contiguous when we increment through the indices in order. Consider the base alphabet-size number format defined above. When we increment the index, this is equivalent to adding one to this number in base alphabet_size. The strings start with the same character if the first string_count characters in the number are all the same. One of these numbers only changes every $alphabet\_size^{string\_count*(length - 1)}$ increments, which we call F_b_step.
+Under the ordering we defined, the strings that all start with the same characters appear contiguously in our vectors when we increment through the indices in order. Consider the base alphabet-size number format defined above. When we increment the index, this is equivalent to adding one to this number in base alphabet_size. The strings start with the same character if the first string_count characters in the number are all the same. One of these numbers only changes every $alphabet\_size^{string\_count*(length - 1)}$ increments, which we call F_b_step.
 
 The first F_b_step indices all start with 0. To determine how many steps must be taken to reach the next range of indices that all start with 1 (in general to go from all indices starting with $x$ to starting with $x + 1$), we observe that the number of necessary steps can be modelled by a finite geometric series with $d$ terms. We can then use the formula for a finite geometric series to know the exact number of steps necessary, which we call F_b_equals_1.
 
