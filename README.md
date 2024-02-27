@@ -1,5 +1,5 @@
-## C++ Implementation of the Kiwi-Soto/Lueker Algorithm
-The code for the implementation of the Kiwi-Soto/Lueker algorithm are held in this branch.
+## C++ Implementation of the Binary Kiwi-Soto/Lueker Algorithm
+The code for the implementation of the Binary Case Kiwi-Soto/Lueker algorithm are held in this branch.
 See their papers here:
 
 (Kiwi and Soto) https://www.cambridge.org/core/journals/combinatorics-probability-and-computing/article/abs/on-a-speculated-relation-between-chvatalsankoff-constants-of-several-sequences/7982322390D3236DC7BC96E42855768A
