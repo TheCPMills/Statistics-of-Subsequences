@@ -1,18 +1,49 @@
-## C++ Implementation of the Kiwi-Soto/Lueker Algorithm
-The code for the implementation of the Kiwi-Soto/Lueker algorithm are held in this branch.
-See their papers here:
+# C++ Implementation of the Feasible Triplet Algorithm
 
-(Kiwi and Soto) https://www.cambridge.org/core/journals/combinatorics-probability-and-computing/article/abs/on-a-speculated-relation-between-chvatalsankoff-constants-of-several-sequences/7982322390D3236DC7BC96E42855768A
+This code is an implementation of the Feasible Triplet Algorithm as defined in the paper "Improved Lower Bounds for the Chvátal-Sankoff
+Constants", written by George T. Heineman, Chase Miller, Daniel Reichman, Andrew Salls, Gábor Sárközy, and Duncan Soiffer. For a further explanation of the code, please read this paper.
 
-(Lueker) https://dl.acm.org/doi/10.1145/1516512.1516519
+# How to run
+All code necessary should be included in this repository. First, download the repository. Open ParallelMulti.cpp and adjust the parameters at the top of the file. Keep in mind that this algorithm is highly exponential, creating and modifying multiple $alphabet\_size^{string\_count*length}$ vectors of doubles. Be careful not to set alphabet_size, string_count, or length too large.
 
+To compile the program, open terminal where ParallelMulti.cpp is saved, and run
 
-As of Jan 29, 2024, the up-to-date versions are:
-1. Parallel.cpp contains a parallelized version that works only off of RAM. It is by far the fastest one, but does not work once arrays become too large to fit in RAM.
-2. BetterMemNew.cpp contains an in-progress version where vectors are written/read to/from external memory in sequential chunks. As the length of the strings increase, it becomes impossible for the vectors to fit in RAM. As such, writing to external memory becomes necessary for calculating high bounds. Doing this in sequential order (which is much faster than non-sequentially) is non-trivial, however. This version is in progress, but working. It currently has no guardrails against incorrect parameters, so be careful to use sensible values and make sure sizes and numbers of threads are powers of 2. It will only work on Linux machines.
-3. KiwiSotoAlgorithm.py contains a *much* slower version of the algorithm, implemented in python. This is the easiest version to understand and write in, so we occasionally use this for testing out new ideas (e.g. implementing new symmetries). This version is not recommended for use.
+`g++ -O3 -pthread -I EIGEN_PATH ./ParallelMulti.cpp -o ParallelMulti`
 
-NOTE: the contents of eigen-3.4.0 are NOT written by us. This is the location of the Eigen 3 library (which has been imported directly into the repository, as recommended). Eigen 3 is licensed under MPL2. See Eigen 3 documentation [here](https://eigen.tuxfamily.org/index) and source code [here](https://gitlab.com/libeigen/eigen).
+where EIGEN_PATH is the path to the Eigen C++ library, version 3.4.0. If you cloned this repository off GitHub, the path should be ./eigen-3.4.0/
 
+This compilation command assumes you have g++ installed, but a slightly modified command should work with gcc or any other standard C++ compiler.
 
-We have not yet created a make file. To run, make sure you have a c++ compiler installed. Then, navigate to this directory, and run `g++ -O3 -I -pthread ./eigen-3.4.0/ ./Parallel.cpp -o Parallel` and then run `./Parallel` (or `./Parallel.exe` on Windows).
+This should have created the file ParallelMulti in the same folder where ParallelMulti.cpp is saved. With the terminal still in this folder, run
+
+`./ParallelMulti`
+
+to run the algorithm.
+
+# Further code explanation
+Below is an explanation of some properties that are relied on in the implementation:
+
+## Ordering of vectors
+All of the vectors in the program implicity use a specific ordering. We can convert between an array of string_count strings and an index for the vectors using the functions stringsToInt and intToStrings. We now define the ordering:
+
+Given strings with characters $a_1a_2\dots a_l$, $b_1b_2\dots b_l$, $\dots$, $\sigma_1\sigma_2\dots \sigma_l$, where $l$ = length, and $\sigma$ is the string_count-th string, we convert each character to a number between 0 (inclusive) and alphabet_size (exclusive). We then combine those numbers into the base alphabet_size number
+
+$(a_1b_1\dots \sigma_1)(a_2b_2\dots \sigma_2)\dots(a_lb_l\dots \sigma_l)$
+
+Finally, this number is converted into a base-10 number that can be stored in C++. The resulting integer is the index that is associated with the strings $a, b, \dots, \sigma$.
+
+## F_b_step, F_b_equals_1, and b
+One important part of the algorithm is the $b$ vector. For every index in $b$, $b$ has a value of 1 if the strings associated with that index all start with the same character, and 0 otherwise.
+
+Under the ordering we defined, the characters that all start with the same characters are contiguous when we increment through the indices in order. Consider the base alphabet-size number format defined above. When we increment the index, this is equivalent to adding one to this number in base alphabet_size. The strings start with the same character if the first string_count characters in the number are all the same. One of these numbers only changes every $alphabet\_size^{string\_count*(length - 1)}$ increments, which we call F_b_step.
+
+The first F_b_step indices all start with 0. To determine how many steps must be taken to reach the next range of indices that all start with 1 (in general to go from all indices starting with $x$ to starting with $x + 1$), we observe that the number of necessary steps can be modelled by a finite geometric series with $d$ terms. We can then use the formula for a finite geometric series to know the exact number of steps necessary, which we call F_b_equals_1.
+
+These constants get used in the line (index / F_b_step) % F_b_equals_1 == 0
+
+index / F_b_step determines which step (starting at 0) index is located in, and then % F_b_equals_1 == 0 checks that the step is a multiple of the number of steps necessary to be in the range of indices that all start with the same character.
+
+# Credits
+This code is based on the definition of the Feasible Triplet algorithm developed by Kiwi and Soto. See their paper at https://www.cambridge.org/core/journals/combinatorics-probability-and-computing/article/abs/on-a-speculated-relation-between-chvatalsankoff-constants-of-several-sequences/7982322390D3236DC7BC96E42855768A
+
+Learn more about Eigen at https://eigen.tuxfamily.org/index.php?title=Main_Page
