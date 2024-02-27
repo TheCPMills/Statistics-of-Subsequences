@@ -1,5 +1,9 @@
 # Supporting document for Parallel.cpp
-Parallel.cpp does not directly follow the explanation in the paper. Namely, a few optimizations are made so that it runs faster. Note that Parallel.cpp does *not* implement any form of external memory reading/writing. That code is in a separate file.
+To set your desired parameters, see the USER PARAMETERS section at the top of Parallel.cpp.
+
+**NOTE: Parallel.cpp consumes 2^(2*length -1) * 4 * 2 bytes of memory. If you do not have enough RAM for the length parameter you set, it (being the program or possibly your entire system) will probably crash/run extremely slowly. Always verify you have enough RAM before running!**
+
+Parallel.cpp does not directly follow the explanation in the paper. Namely, a few optimizations are made so that it runs faster. Note that Parallel.cpp does *not* implement any form of external memory reading/writing. That code is in a separate file. 
 
 Most prominently, L_01 and L_10 have been combined into one loop. This way, elementwise maximums can be done locally instead of separately in F, which saves time. Additionally, given a string in L_01's range, we make the observation that the accesses for that element are related to the accesses for an element in L_10 (namely, element+powminus2) and use that fact to reuse some computations.
 
